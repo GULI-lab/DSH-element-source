@@ -5,7 +5,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/dsh-plugin-better--sidebar-blue" alt="dsh plugin for better-sidebar" />
   <img src="https://img.shields.io/npm/v/dsh-element-source" alt="npm version" />
-  <img src="https://img.shields.io/github/license/YOUR-NAME/dsh-element-source" alt="license" />
+  <img src="https://img.shields.io/github/license/GULI-lab/DSH-element-source" alt="license" />
 </p>
 
 [English](README.md) | 中文
@@ -65,13 +65,13 @@ better-sidebar 内置浏览器的地址栏**硬性拒绝 localhost / 127.x 本�
 **macOS / Linux**（Windows 装了 Git Bash 或 WSL 也可）：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/YOUR-NAME/dsh-element-source/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.sh | bash
 ```
 
 **Windows（PowerShell 5.1+ / pwsh）**：
 
 ```powershell
-irm https://raw.githubusercontent.com/YOUR-NAME/dsh-element-source/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.ps1 | iex
 ```
 
 手动安装（与 better-sidebar 一致）：

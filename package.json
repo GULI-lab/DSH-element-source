@@ -19,7 +19,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR-NAME/dsh-element-source"
+    "url": "https://github.com/GULI-lab/DSH-element-source"
   },
   "publishConfig": {
     "access": "public"

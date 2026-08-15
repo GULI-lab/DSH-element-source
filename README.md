@@ -5,7 +5,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/dsh-plugin-better--sidebar-blue" alt="dsh plugin for better-sidebar" />
   <img src="https://img.shields.io/npm/v/dsh-element-source" alt="npm version" />
-  <img src="https://img.shields.io/github/license/YOUR-NAME/dsh-element-source" alt="license" />
+  <img src="https://img.shields.io/github/license/GULI-lab/DSH-element-source" alt="license" />
 </p>
 
 English | [中文](README.zh.md)
@@ -66,13 +66,13 @@ The better-sidebar built-in browser **hard-refuses loopback addresses** (`localh
 **macOS / Linux** (or Windows with Git Bash / WSL):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/YOUR-NAME/dsh-element-source/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell 5.1+ / pwsh)**:
 
 ```powershell
-irm https://raw.githubusercontent.com/YOUR-NAME/dsh-element-source/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.ps1 | iex
 ```
 
 Manual install (same flow as better-sidebar):
