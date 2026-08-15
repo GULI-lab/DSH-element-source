@@ -80,7 +80,7 @@ curl -fsSL https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/sc
 irm https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.ps1 | iex
 ```
 
-手动安装（与 better-sidebar 一致）：
+手动安装：
 
 ```sh
 cd ~/.dsh/profiles/web
