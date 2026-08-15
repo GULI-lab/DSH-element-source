@@ -20,15 +20,28 @@ if (-not (Test-Path $ProfileDir)) {
 Push-Location $ProfileDir
 try {
     # pnpm >=10 blocks <24h-old packages; pre-allow this one so the first
-    # install never fails on release age.
+    # install never fails on release age. Insert the entry directly under the
+    # existing `minimumReleaseAgeExclude:` list (or append the block when the
+    # key is absent).
     $WorkspaceFile = Join-Path $ProfileDir 'pnpm-workspace.yaml'
     if (-not (Test-Path $WorkspaceFile)) { New-Item -ItemType File -Path $WorkspaceFile | Out-Null }
-    $Workspace = Get-Content $WorkspaceFile -Raw
-    if ($Workspace -notmatch '^  - dsh-element-source$' -and $Workspace -notmatch 'dsh-element-source') {
-        if ($Workspace -match '^minimumReleaseAgeExclude:') {
-            Add-Content -Path $WorkspaceFile -Value "  - dsh-element-source"
+    $hasEntry = Select-String -Path $WorkspaceFile -Pattern '^  - dsh-element-source$' -Quiet
+    if (-not $hasEntry) {
+        $hasBlock = Select-String -Path $WorkspaceFile -Pattern '^minimumReleaseAgeExclude:' -Quiet
+        if ($hasBlock) {
+            $lines = @(Get-Content -Path $WorkspaceFile)
+            $out = New-Object System.Collections.Generic.List[string]
+            $inserted = $false
+            foreach ($line in $lines) {
+                $out.Add($line)
+                if (-not $inserted -and $line -match '^minimumReleaseAgeExclude:') {
+                    $out.Add('  - dsh-element-source')
+                    $inserted = $true
+                }
+            }
+            Set-Content -Path $WorkspaceFile -Value $out -Encoding UTF8
         } else {
-            Add-Content -Path $WorkspaceFile -Value "`nminimumReleaseAgeExclude:`n  - dsh-element-source"
+            Add-Content -Path $WorkspaceFile -Value "minimumReleaseAgeExclude:`n  - dsh-element-source" -Encoding UTF8
         }
     }
 

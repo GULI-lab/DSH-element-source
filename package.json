@@ -1,7 +1,7 @@
 {
   "name": "dsh-element-source",
   "version": "0.1.0",
-  "description": "Click a UI element in the dsh-better-sidebar browser to locate its Vue / React / Svelte / Angular source, then jump to the code in the DSH chat.",
+  "description": "Click any UI element in your running dev page to jump to its Vue / React / Svelte / Angular source in the DSH chat. A click-to-source inspector for DeepSeek Harness, compatible with dsh-better-sidebar.",
   "type": "module",
   "license": "MIT",
   "keywords": [
@@ -21,6 +21,11 @@
     "type": "git",
     "url": "https://github.com/GULI-lab/DSH-element-source"
   },
+  "homepage": "https://github.com/GULI-lab/DSH-element-source",
+  "bugs": {
+    "url": "https://github.com/GULI-lab/DSH-element-source/issues"
+  },
+  "author": "GULI-lab",
   "publishConfig": {
     "access": "public"
   },
@@ -45,6 +50,7 @@
   "engines": {
     "node": ">=20"
   },
+  "packageManager": "pnpm@11.7.0",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -65,6 +71,7 @@
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
+    "CHANGELOG.md",
     "LICENSE",
     "scripts/install.sh",
     "scripts/install.ps1"
@@ -89,9 +96,6 @@
     "react": "^18.2.0"
   },
   "peerDependenciesMeta": {
-    "cordis": {
-      "optional": true
-    },
     "dsh-better-sidebar": {
       "optional": true
     }

@@ -2,11 +2,11 @@
  * Client half of dsh-element-source. Dual-mode, compatible with and without
  * dsh-better-sidebar:
  *  - better-sidebar installed → the preview mounts as its "Local preview" tab
- *    (preferred entry; the floating launcher is suppressed, so the two UIs
- *    never overlap);
- *  - otherwise → a frame-wide `shell.overlay` entry shows a floating
- *    crosshair launcher (bottom-right) toggling the preview panel, bound to
- *    the CURRENT session from the client sessions service.
+ *    (preferred entry; the standalone right sidebar is suppressed, so the two
+ *    UIs never overlap);
+ *  - otherwise → a right-docked sidebar (full-height, collapsible to an edge
+ *    strip) registered in the frame-wide `shell.overlay`, bound to the
+ *    CURRENT session from the client sessions service.
  * Routes (/dsh-element-source/*), postMessage namespaces (dsh-es:*) and slots
  * (shell.overlay) are disjoint from better-sidebar's, so the two plugins
  * coexist without functional conflict.
@@ -298,7 +298,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => slots.inject('shell.overlay', () => slots.register(
     { name: 'shell.overlay', id: OVERLAY_ID, order: 100 },
     () => React.createElement(StandaloneGate, { ctx }),
-  )), 'dsh-element-source: overlay launcher')
+  )), 'dsh-element-source: standalone sidebar')
   // Tab registration: immediate, then retry until better-sidebar appears.
   if (registerSidebarTab(ctx)) return
   let timer = 0

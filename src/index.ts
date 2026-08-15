@@ -37,8 +37,8 @@ export const ROUTE_PREFIX = '/dsh-element-source'
 export interface ElementSourceConfig {
   /**
    * Wake the session agent with a located-source message after a pick.
-   * Default false: a pick only fills the result panel; use "发送到聊天" to
-   * hand it to the agent.
+   * Default false: a pick only fills the chat composer draft; nothing is
+   * sent until the user sends it themselves.
    */
   autoSteer?: boolean
   /** Source-path prefix mappings (e.g. monorepo / node_modules rebasing). */
@@ -113,7 +113,7 @@ function parseResolvePayload(payload: unknown): ResolvePayload {
 export function apply(ctx: Context, config?: ElementSourceConfig): void {
   const resolved: Required<Pick<ElementSourceConfig, 'autoSteer'>> & ElementSourceConfig = {
     // A pick is a selection, not a request: keep the chat quiet until the
-    // user explicitly sends the located source ("发送到聊天").
+    // user sends the located-source draft themselves.
     autoSteer: config?.autoSteer ?? false,
     ...config,
   }

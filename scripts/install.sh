@@ -15,15 +15,20 @@ fi
 
 cd "$PROFILE_DIR"
 
-# pnpm ≥10 blocks <24h-old packages; pre-allow this one so the first install
-# never fails on release age.
+# pnpm >=10 blocks <24h-old packages; pre-allow this one so the first install
+# never fails on release age. Insert the entry directly under the existing
+# `minimumReleaseAgeExclude:` list (or append the block when the key is absent).
 WORKSPACE_FILE=pnpm-workspace.yaml
 if [ ! -f "$WORKSPACE_FILE" ]; then
   touch "$WORKSPACE_FILE"
 fi
 if ! grep -q '^  - dsh-element-source$' "$WORKSPACE_FILE"; then
   if grep -q '^minimumReleaseAgeExclude:' "$WORKSPACE_FILE"; then
-    printf '  - dsh-element-source\n' >> "$WORKSPACE_FILE"
+    awk -v add='  - dsh-element-source' '
+      /^minimumReleaseAgeExclude:/ && !done { print; print add; done = 1; next }
+      { print }
+    ' "$WORKSPACE_FILE" > "$WORKSPACE_FILE.tmp"
+    mv "$WORKSPACE_FILE.tmp" "$WORKSPACE_FILE"
   else
     printf 'minimumReleaseAgeExclude:\n  - dsh-element-source\n' >> "$WORKSPACE_FILE"
   fi

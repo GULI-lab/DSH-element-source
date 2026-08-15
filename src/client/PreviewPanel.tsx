@@ -271,5 +271,5 @@ export function PreviewPanel(props: { ctx: DraftContext; sessionId?: string; cwd
   )
 }
 
-/** Icon names the panel uses (re-exported for the launcher FAB). */
+/** Icon names the panel uses (re-exported for reuse). */
 export type { IconName }

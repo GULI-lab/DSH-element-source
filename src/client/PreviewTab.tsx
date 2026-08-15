@@ -1,7 +1,7 @@
 /**
  * Better-sidebar tab adapter: when dsh-better-sidebar is installed, the
  * preview panel is mounted as its "Local preview" tab (the preferred entry);
- * the floating overlay launcher is suppressed in that case. This file is
+ * the standalone right sidebar is suppressed in that case. This file is
  * type-only dependent on better-sidebar, so it compiles even when the runtime
  * does not have the sidebar.
  */

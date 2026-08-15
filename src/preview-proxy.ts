@@ -9,8 +9,8 @@
  *    fonts, url()) still resolves to the dev server — no HTML rewriting.
  *  - Inject the probe script with an ABSOLUTE GUI URL (immune to the base).
  *  - The page's relative API calls now hit the GUI origin and break; that is
- *    the documented trade-off of this mode (use direct mode when the app's
- *    data layer needs its own origin).
+ *    the documented trade-off of this mode (load the probe in your own page
+ *    instead when the app's data layer needs its own origin).
  *
  * Security: only loopback targets are accepted, the route sits behind the
  * browser-trust fence, and the served page runs same-origin with the GUI —
