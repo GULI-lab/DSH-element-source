@@ -87,78 +87,11 @@ export type ProbeToParentMessage =
   | { type: 'dsh-es:pick'; pick: ElementPick }
   | { type: 'dsh-es:pick-cancel' }
   | { type: 'dsh-es:pick-done' }
-  | { type: 'dsh-es:select'; pick: ElementPick | null }
-  | { type: 'dsh-es:tree'; nodes: TreeNode[] }
-  | { type: 'dsh-es:style'; info: StyleInfo | null }
 
 /** postMessage payloads the parent page sends into the probe script. */
 export type ParentToProbeMessage =
   | { type: 'dsh-es:set-mode'; mode: boolean }
   | { type: 'dsh-es:ping' }
-  | { type: 'dsh-es:get-tree' }
-  | { type: 'dsh-es:get-style' }
-  | { type: 'dsh-es:clear-selection' }
-  | { type: 'dsh-es:select-path'; path: number[] }
-  | { type: 'dsh-es:apply-style'; styles: Partial<StylePatch> }
-
-/** One node of the bounded component tree. */
-export interface TreeNode {
-  /** Index path from the tree root (children[i] walk), stable across renders. */
-  path: number[]
-  tag: string
-  id?: string
-  classes: string[]
-  /** Trimmed text snippet, capped. */
-  text?: string
-  children: TreeNode[]
-}
-
-/** Editable style patch for the selected element (inline styles). */
-export interface StylePatch {
-  width?: string
-  height?: string
-  paddingTop?: string
-  paddingRight?: string
-  paddingBottom?: string
-  paddingLeft?: string
-  marginTop?: string
-  marginRight?: string
-  marginBottom?: string
-  marginLeft?: string
-  /** CSS transform text (e.g. `rotate(15deg)`). */
-  transform?: string
-}
-
-/** Read-only computed style info of the selected element. */
-export interface StyleInfo {
-  /** CSS-module/derived class names, joined. */
-  display?: string
-  position?: string
-  /** px values (numbers, computed). */
-  x?: number
-  y?: number
-  width?: number
-  height?: number
-  paddingTop?: number
-  paddingRight?: number
-  paddingBottom?: number
-  paddingLeft?: number
-  marginTop?: number
-  marginRight?: number
-  marginBottom?: number
-  marginLeft?: number
-  transform?: string
-  color?: string
-  background?: string
-  fontSize?: string
-  zIndex?: string
-  /** The element's own inline `style` attribute text (for the CSS tab). */
-  inlineStyle?: string
-}
-
-/** Bounds for the component tree (kept small to stay responsive). */
-export const TREE_MAX_DEPTH = 8
-export const TREE_MAX_NODES = 240
 
 export const PROTOCOL_VERSION = 1
 
