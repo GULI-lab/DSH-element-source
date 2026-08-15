@@ -18,7 +18,7 @@ import type {} from 'dsh-better-sidebar'
 import type { BetterSidebarService } from 'dsh-better-sidebar'
 import { PreviewPanel } from './PreviewPanel.tsx'
 import { PreviewTab } from './PreviewTab.tsx'
-import { Icon } from './icons.tsx'
+import { Icon, IconButton } from './icons.tsx'
 
 /** Services required before mounting (client runtime sessions + the slot registry). */
 export const inject = ['slots', 'sessions']
@@ -60,10 +60,13 @@ function subscribeSessions(ctx: Context, fn: () => void): () => void {
   return sessions?.list?.subscribe?.(fn) ?? (() => {})
 }
 
-/** The floating launcher + panel, registered in shell.overlay. */
+/** The standalone right sidebar (registered in shell.overlay; open by default
+ *  like a workbench sidebar, collapsible to a slim edge strip). Colors follow
+ *  the DSH theme tokens so the panel matches the GUI in both light and dark
+ *  themes. */
 function Launcher(props: { ctx: Context }): React.ReactElement {
   const { ctx } = props
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [scope, setScope] = useState<SessionScope | undefined>(() => readSessionScope(ctx))
 
   useEffect(() => subscribeSessions(ctx, () => setScope(readSessionScope(ctx))), [ctx])
@@ -77,46 +80,60 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
     return () => window.removeEventListener('keydown', dismiss)
   }, [open, dismiss])
 
-  return (
-    <>
-      {/* Launcher FAB */}
+  const fill = 'var(--dsw-specific-sidebar-fill, #1b1b22)'
+  const border = 'var(--dsw-alias-border-l1, #3a3f4b)'
+  const accent = 'var(--dsw-alias-brand-primary, #4f8cff)'
+  const title = document.documentElement.lang.toLowerCase().startsWith('zh') ? '本地预览' : 'Local preview'
+
+  if (!open) {
+    // Collapsed edge strip (still a sidebar, not a floating window).
+    return (
       <button
         type="button"
-        title="本地预览 · dsh-element-source"
-        aria-label="本地预览"
-        onClick={() => setOpen(previous => !previous)}
+        title={title}
+        aria-label={title}
+        onClick={() => setOpen(true)}
         style={{
-          position: 'fixed', right: 18, bottom: 18, zIndex: 2147483001,
-          width: 42, height: 42, borderRadius: '50%', cursor: 'pointer',
-          border: '1px solid var(--dsw-alias-border-l1, #3a3f4b)',
-          background: 'var(--dsw-alias-bg-overlay, #1c1e26)',
-          color: open ? 'var(--dsw-alias-brand-primary, #4f8cff)' : 'inherit',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.28)',
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+          position: 'fixed', top: '50%', right: 0, transform: 'translateY(-50%)',
+          zIndex: 2147483000, pointerEvents: 'auto',
+          width: 26, height: 96, padding: 0,
+          borderTopLeftRadius: 8, borderBottomLeftRadius: 8,
+          border: `1px solid ${border}`, borderRight: 'none',
+          background: fill, color: accent, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
-        <Icon name="crosshair" size={20} />
+        <Icon name="crosshair" size={16} />
       </button>
+    )
+  }
 
-      {/* Preview panel */}
-      {open && (
-        <div
-          style={{
-            position: 'fixed', right: 16, bottom: 74, zIndex: 2147483000,
-            width: 620, maxWidth: 'calc(100vw - 32px)',
-            height: 'min(72vh, 680px)',
-            borderRadius: 12, overflow: 'hidden',
-            border: '1px solid var(--dsw-alias-border-l1, #3a3f4b)',
-            background: 'var(--dsw-alias-bg-overlay, #1c1e26)',
-            color: 'var(--dsw-alias-label-primary, inherit)',
-            boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
-            display: 'flex', flexDirection: 'column',
-          }}
-        >
-          <PreviewPanel key={scope?.sessionId ?? 'none'} ctx={ctx} sessionId={scope?.sessionId} cwd={scope?.cwd} />
-        </div>
-      )}
-    </>
+  return (
+    <div
+      style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 2147483000,
+        width: 380, maxWidth: '86vw', pointerEvents: 'auto',
+        display: 'flex', flexDirection: 'column',
+        background: fill, color: 'var(--dsw-alias-label-primary, inherit)',
+        borderLeft: `1px solid ${border}`,
+      }}
+    >
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '8px 10px', borderBottom: `1px solid ${border}`,
+        fontSize: 12, fontWeight: 600, flexShrink: 0,
+      }}>
+        <Icon name="crosshair" size={14} color={accent} />
+        <span>{title}</span>
+        <span style={{ flex: 1 }} />
+        <IconButton icon="arrow-right" title="收起" onClick={() => setOpen(false)} />
+      </div>
+      {/* Body */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <PreviewPanel key={scope?.sessionId ?? 'none'} ctx={ctx} sessionId={scope?.sessionId} cwd={scope?.cwd} />
+      </div>
+    </div>
   )
 }
 

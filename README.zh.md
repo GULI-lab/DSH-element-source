@@ -44,7 +44,7 @@
      → postMessage（跨域可用）→ DSH 页面
 「本地预览」入口（本插件注册，可打开 localhost）
   ├─ 已装 dsh-better-sidebar → 侧边栏「本地预览」Tab（推荐入口）
-  └─ 未装 → 右下角悬浮十字按钮 + 独立面板（跟随当前会话）
+  └─ 未装 → 右侧全高侧边栏（可收起为边缘条，跟随当前会话）
   └─ 收 postMessage → POST /dsh-element-source/api/resolve
 DSH Host
   ├─ GET  /dsh-element-source/inject.js   （对外服务探针脚本）
@@ -58,7 +58,7 @@ DSH Host
 
 ### 与 better-sidebar 的兼容
 
-插件**不依赖** better-sidebar，但**兼容**它：装了 better-sidebar 时入口是它的侧边栏 Tab（悬浮按钮不显示，避免重叠）；没装时是右下角悬浮按钮。两者路由（`/sidebar/*` vs `/dsh-element-source/*`）、postMessage 命名空间、UI 插槽完全独立，互不冲突。
+插件**不依赖** better-sidebar，但**兼容**它：装了 better-sidebar 时入口是它的侧边栏 Tab（本插件的独立侧边栏不显示，避免重叠）；没装时是右侧全高侧边栏（可收起为边缘条），背景用 DSH 主题 token，随 GUI 明暗主题自动变化。两者路由（`/sidebar/*` vs `/dsh-element-source/*`）、postMessage 命名空间、UI 插槽完全独立，互不冲突。
 
 ### 为什么不在内置浏览器里做
 
@@ -66,7 +66,7 @@ better-sidebar 内置浏览器的地址栏**硬性拒绝 localhost / 127.x 本�
 
 ## 安装
 
-**前置**：已装好 DSH（`dsh web` 可运行）。**可选**：[dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)——装了它，入口是侧边栏「本地预览」Tab；不装，则是右下角悬浮按钮。
+**前置**：已装好 DSH（`dsh web` 可运行）。**可选**：[dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)——装了它，入口是侧边栏「本地预览」Tab；不装，则是右侧全高侧边栏。
 
 **macOS / Linux**（Windows 装了 Git Bash 或 WSL 也可）：
 
@@ -121,7 +121,7 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 
 ## 使用
 
-1. **打开入口**：装了 better-sidebar → 侧边栏「本地预览」Tab；没装 → 点右下角悬浮十字按钮（**注意：这里打开的是你自己的开发页面，不是 DSH 界面本身**）；
+1. **打开入口**：装了 better-sidebar → 侧边栏「本地预览」Tab；没装 → 右侧全高侧边栏（默认展开，可收起为边缘条）（**注意：这里打开的是你自己的开发页面，不是 DSH 界面本身**）；
 2. 地址栏输入 `http://localhost:3000`（你的 dev server），回车；
 3. 看**探针状态图标**变绿（wifi 图标，代理自动就绪）；
 4. 点**选择**图标（十字准星），在页面里移动鼠标——目标元素高亮；**点击**即定位源码；

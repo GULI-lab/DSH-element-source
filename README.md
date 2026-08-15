@@ -1,6 +1,6 @@
-# dsh-element-source
+# DSH-element-source
 
-> Click any UI element in the DSH `dsh-better-sidebar` sidebar to locate its Vue / React / Svelte / Angular source file, and let the chat dialog show the code — so you can fine-tune frontend pages faster.
+> Click any UI element in the DSH `DSH-better-sidebar` sidebar to locate its Vue / React / Svelte / Angular source file, and let the chat dialog show the code — so you can fine-tune frontend pages faster.
 
 <p align="center">
   <img src="https://img.shields.io/badge/dsh-plugin-better--sidebar-blue" alt="dsh plugin for better-sidebar" />
@@ -45,8 +45,8 @@ in-page probe (inject.js: IIFE, zero deps)
      → postMessage (cross-origin safe) → DSH page
 "Local preview" entry (registered by this plugin; can open localhost)
   ├─ dsh-better-sidebar installed → its "Local preview" tab (preferred entry)
-  └─ otherwise → a floating crosshair button (bottom-right) + panel bound to the
-     current session
+  └─ otherwise → a right-docked sidebar (full-height, collapsible to an edge
+     strip) bound to the current session
   └─ receives postMessage → POST /dsh-element-source/api/resolve
 DSH Host
   ├─ GET  /dsh-element-source/inject.js   (serves the probe script publicly)
@@ -60,7 +60,7 @@ DSH Host
 
 ### dsh-better-sidebar compatibility
 
-This plugin does NOT depend on dsh-better-sidebar, but is compatible with it: with the sidebar installed the entry is its "Local preview" tab (the floating button is suppressed, so the two UIs never overlap); without it, a bottom-right floating button opens the panel. Routes (`/sidebar/*` vs `/dsh-element-source/*`), postMessage namespaces and UI slots are fully disjoint, so the two plugins coexist without conflict.
+This plugin does NOT depend on dsh-better-sidebar, but is compatible with it: with the sidebar installed the entry is its "Local preview" tab (the standalone right sidebar is suppressed, so the two UIs never overlap); without it, a full-height right sidebar (collapsible to an edge strip) hosts the panel, themed with the DSH tokens so it follows the GUI theme. Routes (`/sidebar/*` vs `/dsh-element-source/*`), postMessage namespaces and UI slots are fully disjoint, so the two plugins coexist without conflict.
 
 ### Why not the built-in browser?
 
@@ -68,7 +68,7 @@ The better-sidebar built-in browser **hard-refuses loopback addresses** (`localh
 
 ## Install
 
-**Prereqs**: DSH (`dsh web` runs). **Optional**: [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) — with it the entry is the sidebar's "Local preview" tab; without it, a bottom-right floating button opens the panel.
+**Prereqs**: DSH (`dsh web` runs). **Optional**: [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) — with it the entry is the sidebar's "Local preview" tab; without it, a full-height right sidebar hosts the panel.
 
 **macOS / Linux** (or Windows with Git Bash / WSL):
 
@@ -123,7 +123,7 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 
 ## Usage
 
-1. **Open the entry**: with better-sidebar → its **Local preview** tab; without it → click the floating crosshair button bottom-right (**note: this previews YOUR page, not the DSH UI itself**);
+1. **Open the entry**: with better-sidebar → its **Local preview** tab; without it → the right-docked sidebar (open by default; collapsible to an edge strip) (**note: this previews YOUR page, not the DSH UI itself**);
 2. Enter `http://localhost:3000` (your dev server) and press Enter;
 3. Watch the **probe status icon** (wifi) turn green — ready automatically in proxy mode;
 4. Click the **select** icon (crosshair), move the mouse — the target highlights; **click** to locate the source;
