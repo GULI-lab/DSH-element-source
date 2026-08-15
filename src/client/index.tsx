@@ -64,12 +64,11 @@ function subscribeSessions(ctx: Context, fn: () => void): () => void {
 const LS_WIDTH = 'dsh-element-source.sidebarWidth'
 const LS_OPEN = 'dsh-element-source.sidebarOpen'
 
-const MIN_WIDTH = 240
-const MAX_WIDTH = 640
+const MIN_WIDTH = 160
 
 function clampWidth(value: number): number {
   const viewport = typeof window === 'undefined' ? 640 : window.innerWidth
-  return Math.min(Math.max(Math.round(value), MIN_WIDTH), Math.min(MAX_WIDTH, Math.round(viewport * 0.6)))
+  return Math.min(Math.max(Math.round(value), MIN_WIDTH), Math.round(viewport * 0.92))
 }
 
 function readNumber(key: string, fallback: number): number {
@@ -136,15 +135,13 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
   useEffect(() => subscribeSessions(ctx, () => setScope(readSessionScope(ctx))), [ctx])
 
   // Reflow the chat: squeeze #root by the sidebar width while open (like
-  // better-sidebar), clear it when collapsed or unmounted.
+  // better-sidebar); clear when collapsed, and on unmount. No cleanup on width
+  // change so committing a drag never flickers the chat.
   useEffect(() => {
-    if (!open) {
-      setAppSqueeze(undefined)
-      return
-    }
-    setAppSqueeze(width)
-    return () => { setAppSqueeze(undefined) }
+    if (open) setAppSqueeze(width)
+    else setAppSqueeze(undefined)
   }, [open, width])
+  useEffect(() => () => { setAppSqueeze(undefined) }, [])
 
   const dismiss = useCallback((event: KeyboardEvent): void => {
     if (event.key === 'Escape') setOpen(false)
@@ -155,8 +152,24 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
     return () => window.removeEventListener('keydown', dismiss)
   }, [open, dismiss])
 
-  // Drag-to-resize: dragging the left edge right shrinks, left grows.
+  // Drag-to-resize: dragging the left edge right shrinks, left grows. The
+  // live value is applied straight to the DOM (container width + #root margin,
+  // transition off) so dragging never re-renders React per pixel; the final
+  // width is committed to state on pointer up.
+  const containerRef = React.useRef<HTMLDivElement>(null)
   const dragState = React.useRef<{ startX: number; startWidth: number } | null>(null)
+  const dragWidth = React.useRef<number>(width)
+
+  const applyLiveWidth = useCallback((next: number): void => {
+    dragWidth.current = next
+    if (containerRef.current !== null) containerRef.current.style.width = `${next}px`
+    const root = appRoot()
+    if (root !== null) {
+      root.style.marginRight = `${next}px`
+      root.style.transition = 'none'
+    }
+  }, [])
+
   const startDrag = useCallback((event: React.PointerEvent<HTMLDivElement>): void => {
     dragState.current = { startX: event.clientX, startWidth: width }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -164,10 +177,11 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
   const onDragMove = useCallback((event: React.PointerEvent<HTMLDivElement>): void => {
     const state = dragState.current
     if (state === null) return
-    setWidth(clampWidth(state.startWidth + (state.startX - event.clientX)))
-  }, [])
+    applyLiveWidth(clampWidth(state.startWidth + (state.startX - event.clientX)))
+  }, [applyLiveWidth])
   const endDrag = useCallback((): void => {
     dragState.current = null
+    setWidth(dragWidth.current)
   }, [])
 
   const fill = 'var(--dsw-specific-sidebar-fill, #1b1b22)'
@@ -185,7 +199,7 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
         aria-label={title}
         onClick={() => setOpen(true)}
         style={{
-          position: 'fixed', top: 64, right: 0, zIndex: 2147483000, pointerEvents: 'auto',
+          position: 'fixed', top: 80, right: 0, zIndex: 2147483000, pointerEvents: 'auto',
           width: 30, height: 140, padding: 0, gap: 6,
           borderTopLeftRadius: 10, borderBottomLeftRadius: 10,
           border: `1px solid ${border}`, borderRight: 'none',
@@ -202,6 +216,7 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
 
   return (
     <div
+      ref={containerRef}
       style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 2147483000,
         width, pointerEvents: 'auto',
