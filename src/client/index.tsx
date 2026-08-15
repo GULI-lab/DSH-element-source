@@ -243,7 +243,7 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
         padding: '8px 10px', borderBottom: `1px solid ${border}`,
         fontSize: 12, fontWeight: 600, flexShrink: 0,
       }}>
-        <Icon name="browser" size={14} color={accent} />
+        <span style={{ color: accent, display: 'inline-flex' }}><Icon name="browser" size={14} /></span>
         <span>{title}</span>
         <span style={{ flex: 1 }} />
         <IconButton icon="arrow-right" title="收起" onClick={() => setOpen(false)} />

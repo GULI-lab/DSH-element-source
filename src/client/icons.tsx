@@ -23,14 +23,27 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
   </>,
 }
 
-/** Inline SVG icon (24px grid, stroke = currentColor). */
+/** Per-icon viewBox: the stroke icons are 24px-grid; the browser brand icon
+ *  keeps its original 1024 coordinate space. */
+const ICON_VIEWBOX: Record<IconName, string> = {
+  'arrow-right': '0 0 24 24',
+  external: '0 0 24 24',
+  crosshair: '0 0 24 24',
+  wifi: '0 0 24 24',
+  'wifi-off': '0 0 24 24',
+  refresh: '0 0 24 24',
+  x: '0 0 24 24',
+  browser: '0 0 1024 1024',
+}
+
+/** Inline SVG icon (stroke icons are 24px-grid; the browser icon is filled). */
 export function Icon(props: { name: IconName; size?: number; color?: string }): React.ReactElement {
   const { name, size = 15, color } = props
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox={ICON_VIEWBOX[name]}
       fill="none"
       stroke={color ?? 'currentColor'}
       strokeWidth={2}
