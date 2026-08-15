@@ -123,11 +123,13 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 2. **Mode**: **Proxy (no project changes)** is the default — the plugin forwards the page and injects the probe automatically. If your app needs same-origin API calls (relative paths), switch to **Direct** and load the probe as described above;
 3. Enter `http://localhost:3000` (your dev server) and press Enter;
 4. Watch the **probe status light** turn green (auto in proxy mode; in direct mode the page must already load the probe);
-5. Tick **Pick mode**, move the mouse — the target highlights; **click** to pick (auto-exits);
-6. The panel shows only the location: `file:line`, the method and the source snippet;
-7. **The pick fills the chat input DRAFT automatically** (e.g. `[Element located] src/components/App.vue:12`) — nothing is sent; add your own wording and press Enter.
+5. Tick **Select mode**, move the mouse — the target highlights; **click** to **persist the selection** (green box stays; click again or `Esc` to clear);
+6. The right-hand **inspector** panel:
+   - **Located card**: `file:line` + the method; **+ Add to chat** fills the chat input DRAFT (never sends — add your wording and press Enter yourself);
+   - **Components**: a bounded DOM tree — click a node to locate and select the element in the page;
+   - **Design / CSS**: view and **live-edit** the selected element's width/height, padding, margin and rotation (commit on Enter/blur; edits go to the inline style); the CSS tab shows the inline style and a computed summary.
 
-> `Esc` cancels picking. A pick only fills the composer draft; whether to send is entirely your call.
+> `Esc` cancels selection. A selection never sends anything; "Add to chat" fills the composer draft only.
 
 **Two debugging aids:**
 

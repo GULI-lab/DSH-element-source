@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import type { TreeNode } from '../src/protocol.ts'
 import {
   bestProbeResult,
   describeElement,
+  elementAtPath,
   probeAngular,
   probeChain,
   probeCodeInspector,
   probeReact,
   probeSvelte,
   probeVue,
+  styleInfoOf,
+  stylePatchCss,
+  treeOf,
   type ProbeElement,
 } from '../src/inject/probes.ts'
 
@@ -215,5 +220,71 @@ describe('describeElement', () => {
     const value = descriptor.attrs[0]?.[1]
     expect(value?.endsWith('…')).toBe(true)
     expect(Array.from(value ?? '').length).toBeLessThanOrEqual(41)
+  })
+})
+
+describe('treeOf / elementAtPath', () => {
+  function treeNode(partial: Partial<ProbeElement> & { tagName?: string }): ProbeElement {
+    return node({ tagName: 'div', ...partial })
+  }
+
+  it('walks the DOM with stable index paths', () => {
+    const leaf = treeNode({ tagName: 'span', className: 'btn-ok', textContent: '确定' })
+    const inner = treeNode({ tagName: 'div', className: 'hello', children: [leaf] })
+    const root = treeNode({ tagName: 'body', children: [inner] })
+    const tree = treeOf(root)
+    expect(tree.tag).toBe('body')
+    expect(tree.path).toEqual([])
+    expect(tree.children[0]).toMatchObject({ tag: 'div', classes: ['hello'], path: [0] })
+    expect(tree.children[0]?.children[0]).toMatchObject({ tag: 'span', classes: ['btn-ok'], text: '确定', path: [0, 0] })
+    expect(elementAtPath(root, [0, 0])).toBe(leaf)
+    expect(elementAtPath(root, [0, 1])).toBeNull()
+  })
+
+  it('respects the node bound', () => {
+    const children: ProbeElement[] = []
+    for (let index = 0; index < 10; index += 1) {
+      children.push(treeNode({ tagName: 'span', textContent: `x${index}` }))
+    }
+    const root = treeNode({ tagName: 'body', children })
+    const tree = treeOf(root, 8, 5)
+    const count = (node: TreeNode): number => 1 + node.children.reduce((sum, child) => sum + count(child), 0)
+    expect(count(tree)).toBeLessThanOrEqual(5)
+  })
+})
+
+describe('styleInfoOf / stylePatchCss', () => {
+  it('builds style info from a rect and computed map', () => {
+    const el = node({ tagName: 'div', attributes: attrs([['style', 'color: red']]) })
+    const info = styleInfoOf(el, { x: 10.4, y: 20.6, width: 100.2, height: 50.8 }, {
+      display: 'flex',
+      position: 'relative',
+      'padding-top': '4px',
+      'margin-left': '8px',
+      transform: 'rotate(15deg)',
+      color: 'rgb(1, 2, 3)',
+      'background-color': 'rgb(4, 5, 6)',
+      'font-size': '14px',
+      'z-index': '10',
+    })
+    expect(info.x).toBe(10)
+    expect(info.y).toBe(21)
+    expect(info.width).toBe(100)
+    expect(info.height).toBe(51)
+    expect(info.paddingTop).toBe(4)
+    expect(info.marginLeft).toBe(8)
+    expect(info.transform).toBe('rotate(15deg)')
+    expect(info.color).toBe('rgb(1, 2, 3)')
+    expect(info.inlineStyle).toBe('color: red')
+  })
+
+  it('renders a style patch as css text', () => {
+    expect(stylePatchCss({
+      width: '120px',
+      paddingTop: '4px',
+      marginLeft: '8px',
+      transform: 'rotate(15deg)',
+    })).toBe('width: 120px; padding-top: 4px; margin-left: 8px; transform: rotate(15deg)')
+    expect(stylePatchCss({})).toBe('')
   })
 })

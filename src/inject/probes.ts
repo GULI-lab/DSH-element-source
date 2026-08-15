@@ -15,7 +15,19 @@
  *  5. Angular dev markers (`ng-reflect-*`, `_nghost-*`) — framework only,
  *     resolution falls back to the workspace search.
  */
-import { capText, classList, normalizeSearchText, type ElementDescriptor, type PickFramework, type PickSource } from '../protocol.ts'
+import {
+  capText,
+  classList,
+  normalizeSearchText,
+  type ElementDescriptor,
+  type PickFramework,
+  type PickSource,
+  type StyleInfo,
+  type StylePatch,
+  type TreeNode,
+  TREE_MAX_DEPTH,
+  TREE_MAX_NODES,
+} from '../protocol.ts'
 
 /** The minimal DOM-like contract the probes need (satisfied by real elements). */
 export interface ProbeElement {
@@ -26,8 +38,13 @@ export interface ProbeElement {
   parentElement: ProbeElement | null
   attributes?: NamedNodeMap | ProbeAttribute[] | { [name: string]: unknown }
   getAttribute?(name: string): string | null
+  /** Element children (Element.children / HTMLCollection / NodeList in the real DOM). */
+  children?: ProbeChildren
   [key: string]: unknown
 }
+
+/** Array-like element children (arrays in tests). */
+export type ProbeChildren = ProbeElement[] | { length: number; [index: number]: ProbeElement }
 
 /** A DOM attribute row (element.attributes is an iterable NamedNodeMap). */
 export interface ProbeAttribute {
@@ -349,4 +366,127 @@ export function describeElement(el: ProbeElement): ElementDescriptor {
 /** The framework label for display when no probe matched. */
 export function frameworkOf(el: ProbeElement): PickFramework {
   return probeNode(el)?.framework ?? 'generic'
+}
+
+/** Iterate an element's children (array or array-like). */
+function childList(el: ProbeElement): ProbeElement[] {
+  const children = el.children
+  if (children === undefined) return []
+  if (Array.isArray(children)) return children
+  const out: ProbeElement[] = []
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index]
+    if (child !== undefined) out.push(child)
+  }
+  return out
+}
+
+/**
+ * Build a bounded component tree of the page (walk from `root`), returning the
+ * ROOT node with its subtree. Nodes carry an index `path` so the parent can
+ * ask the probe to select the exact element later; text snippets let the host
+ * text-search the source.
+ */
+export function treeOf(root: ProbeElement, maxDepth = TREE_MAX_DEPTH, maxNodes = TREE_MAX_NODES): TreeNode {
+  let count = 0
+
+  const walk = (el: ProbeElement, path: number[], depth: number): TreeNode => {
+    const node: TreeNode = {
+      path,
+      tag: tagOf(el),
+      classes: classesOf(el).slice(0, 2),
+      children: [],
+    }
+    const text = treeTextOf(el)
+    if (text !== undefined) node.text = text
+    if (typeof el.id === 'string' && el.id !== '') node.id = el.id
+    count += 1
+    if (depth < maxDepth && count < maxNodes) {
+      childList(el).forEach((child, index) => {
+        if (count >= maxNodes) return
+        node.children.push(walk(child, [...path, index], depth + 1))
+      })
+    }
+    return node
+  }
+
+  return walk(root, [], 0)
+}
+
+/** Resolve an index path from the tree root back to the element (or null). */
+export function elementAtPath(root: ProbeElement, path: readonly number[]): ProbeElement | null {
+  let node: ProbeElement = root
+  for (const index of path) {
+    const children = childList(node)
+    const child = children[index]
+    if (child === undefined) return null
+    node = child
+  }
+  return node
+}
+
+/** Build a bounded text snippet for the tree node. */
+export function treeTextOf(el: ProbeElement): string | undefined {
+  const text = typeof el.textContent === 'string' ? normalizeSearchText(el.textContent) : ''
+  return text === '' ? undefined : capText(text, 40)
+}
+
+/**
+ * Build the read-only style info for one element from a rect + computed-style
+ * map (pure; the inject script supplies `getComputedStyle` reads).
+ */
+export function styleInfoOf(
+  el: ProbeElement,
+  rect: { x: number; y: number; width: number; height: number },
+  computed: Record<string, string>,
+): StyleInfo {
+  const px = (name: string): number | undefined => {
+    const value = computed[name]
+    if (value === undefined) return undefined
+    const parsed = Number.parseFloat(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  const inlineStyle = el.getAttribute !== undefined ? el.getAttribute('style') : null
+  return {
+    display: computed.display,
+    position: computed.position,
+    x: Math.round(rect.x),
+    y: Math.round(rect.y),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height),
+    paddingTop: px('padding-top'),
+    paddingRight: px('padding-right'),
+    paddingBottom: px('padding-bottom'),
+    paddingLeft: px('padding-left'),
+    marginTop: px('margin-top'),
+    marginRight: px('margin-right'),
+    marginBottom: px('margin-bottom'),
+    marginLeft: px('margin-left'),
+    transform: computed.transform,
+    color: computed.color,
+    background: computed.backgroundColor,
+    fontSize: computed.fontSize,
+    zIndex: computed.zIndex,
+    inlineStyle: inlineStyle === null ? undefined : inlineStyle,
+  }
+}
+
+/** Render a style patch as inline-style declarations (for `el.style.cssText`). */
+export function stylePatchCss(styles: Partial<StylePatch>): string {
+  const parts: string[] = []
+  const push = (property: string, value: string | undefined): void => {
+    if (value !== undefined && value.trim() !== '') parts.push(`${property}: ${value.trim()}`)
+  }
+  push('width', styles.width)
+  push('height', styles.height)
+  push('padding-top', styles.paddingTop)
+  push('padding-right', styles.paddingRight)
+  push('padding-bottom', styles.paddingBottom)
+  push('padding-left', styles.paddingLeft)
+  push('margin-top', styles.marginTop)
+  push('margin-right', styles.marginRight)
+  push('margin-bottom', styles.marginBottom)
+  push('margin-left', styles.marginLeft)
+  push('transform', styles.transform)
+  return parts.join('; ')
 }
