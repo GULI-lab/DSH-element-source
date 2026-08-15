@@ -125,9 +125,9 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 4. Watch the **probe status light** turn green (auto in proxy mode; in direct mode the page must already load the probe);
 5. Tick **Pick mode**, move the mouse — the target highlights; **click** to pick (auto-exits);
 6. The result panel shows `file:line` + the method; one click opens the file in the better-sidebar editor tab or copies the path;
-7. By default the agent is woken automatically: an `[Element located]` message lands in the chat, the agent reads the file and shows the code, then waits for your request.
+7. **Picking only records the result — it never disturbs the chat**: when you are ready, click **Send to chat** and the agent reads the file and shows the code, then waits for your request.
 
-> `Esc` cancels picking. Click **Send to chat** to hand the last pick to the agent manually (when `autoSteer` is off).
+> `Esc` cancels picking. A pick only fills the result panel; **Send to chat** hands it to the agent (auto-steer exists via `autoSteer`, but it defaults to off).
 
 **Two debugging aids:**
 
@@ -141,7 +141,7 @@ Override the row in your `cordis.patch.yml` (or the profile patch):
 ```yaml
 - id: element-source
   config:
-    autoSteer: false        # don't wake the agent after a pick; use "Send to chat" instead (default true)
+    autoSteer: false        # wake the agent right after a pick (default false: use "Send to chat")
     mappings:               # source-path prefix mappings (monorepo / node_modules rebasing)
       - find: '@app/ui/src'
         replacement: 'D:/workspace/my-app/packages/ui/src'

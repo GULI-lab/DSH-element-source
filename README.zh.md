@@ -123,9 +123,9 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 4. 看**探针状态灯**变绿（代理模式自动就绪；直连模式需页面已加载探针）；
 5. 勾选「拾取模式」，在页面里移动鼠标——目标元素高亮；**点击**即完成拾取，自动退出；
 6. 结果面板显示 `文件:行号` 与定位方式，可一键「在编辑器打开」或「复制路径」；
-7. 默认情况下插件已自动唤醒助手：聊天里出现「元素定位」消息，助手读取文件并展示源码，等你提出修改需求。
+7. **点击拾取只记录结果，不会打扰聊天**——确认后点「发送到聊天」，助手读取文件并在对话里展示源码，等你提出修改需求。
 
-> `Esc` 取消拾取。点击「发送到聊天」可手动把上一条拾取结果交给助手（当 `autoSteer` 关闭时）。
+> `Esc` 取消拾取。点击只记录结果，点「发送到聊天」才会把定位结果交给助手（`autoSteer` 开启时才自动发送，默认关闭）。
 
 **两个调试辅助**：
 
@@ -139,7 +139,7 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 ```yaml
 - id: element-source
   config:
-    autoSteer: false        # 拾取后不自动唤醒助手，改为手动「发送到聊天」（默认 true）
+    autoSteer: false        # 拾取后自动唤醒助手（默认 false：点「发送到聊天」才通知）
     mappings:               # 源码路径前缀映射（monorepo / node_modules 重定向）
       - find: '@app/ui/src'
         replacement: 'D:/workspace/my-app/packages/ui/src'

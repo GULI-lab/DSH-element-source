@@ -60,6 +60,23 @@ describe('buildPreviewDocument', () => {
     expect(out.indexOf('<base')).toBeLessThan(out.indexOf('<title>'))
   })
 
+  it('restores the original path for SPA routers', () => {
+    const html = '<head><title>x</title></head>'
+    const withPath = new URL('http://localhost:5173/chat')
+    const out = buildPreviewDocument(html, withPath, inject)
+    // JSON.stringify produces double quotes around the path string.
+    expect(out).toContain('history.replaceState(null,\'\',"/chat")')
+    // The restore runs before the page's own scripts (right after <head>).
+    expect(out.indexOf('history.replaceState')).toBeLessThan(out.indexOf('<title>'))
+  })
+
+  it('keeps query strings in the restored path', () => {
+    const html = '<head></head>'
+    const withQuery = new URL('http://localhost:5173/?tab=1')
+    const out = buildPreviewDocument(html, withQuery, inject)
+    expect(out).toContain('history.replaceState(null,\'\',"/?tab=1")')
+  })
+
   it('falls back to prepending when there is no <head>', () => {
     const out = buildPreviewDocument('<body><h1>hi</h1></body>', target, inject)
     expect(out.startsWith('<base href=')).toBe(true)

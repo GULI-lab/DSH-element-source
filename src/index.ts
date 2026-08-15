@@ -35,7 +35,11 @@ export const ROUTE_PREFIX = '/dsh-element-source'
 
 /** Plugin configuration (optional; defaults are documented in the README). */
 export interface ElementSourceConfig {
-  /** Wake the session agent with a located-source message after a pick. Default true. */
+  /**
+   * Wake the session agent with a located-source message after a pick.
+   * Default false: a pick only fills the result panel; use "发送到聊天" to
+   * hand it to the agent.
+   */
   autoSteer?: boolean
   /** Source-path prefix mappings (e.g. monorepo / node_modules rebasing). */
   mappings?: readonly SourceMapping[]
@@ -108,7 +112,9 @@ function parseResolvePayload(payload: unknown): ResolvePayload {
  */
 export function apply(ctx: Context, config?: ElementSourceConfig): void {
   const resolved: Required<Pick<ElementSourceConfig, 'autoSteer'>> & ElementSourceConfig = {
-    autoSteer: config?.autoSteer ?? true,
+    // A pick is a selection, not a request: keep the chat quiet until the
+    // user explicitly sends the located source ("发送到聊天").
+    autoSteer: config?.autoSteer ?? false,
     ...config,
   }
   const fence = (req: IncomingMessage): boolean => isTrustedApiRequest(req, trustedHostsOf(ctx))

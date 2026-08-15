@@ -47,6 +47,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   copyPath: { zh: '复制路径', en: 'Copy path' },
   copied: { zh: '已复制', en: 'Copied' },
   sendToChat: { zh: '发送到聊天', en: 'Send to chat' },
+  notSteeredHint: { zh: '点击只记录结果，尚未通知助手——确认后点「发送到聊天」', en: 'Pick recorded only; the agent is not notified yet — click "Send to chat" when ready' },
   steered: { zh: '已通知助手，聊天将展示源码', en: 'Agent notified; the chat will show the source' },
   methodLabel: { zh: '定位方式', en: 'Method' },
   noUrl: { zh: '先输入地址打开页面', en: 'Enter a URL first' },
@@ -147,7 +148,12 @@ export function PreviewTab(props: TabComponentProps) {
       })
       setResult(located)
       setStatus(null)
-      if (!located.ok) setStatus(located.error ?? t('notLocated'))
+      if (!located.ok) {
+        const cwdHint = scope.cwd !== undefined && scope.cwd !== ''
+          ? `（会话工作区：${scope.cwd}）`
+          : ''
+        setStatus(`${located.error ?? t('notLocated')}${cwdHint}`)
+      }
     } catch (error) {
       setResult(null)
       setStatus(error instanceof Error ? error.message : String(error))
@@ -343,12 +349,13 @@ export function PreviewTab(props: TabComponentProps) {
               padding: 6, borderRadius: 6, background: 'rgba(127,127,127,0.12)',
             }}>{result.snippet}</pre>
           )}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <button type="button" onClick={openInEditor} style={buttonStyle}>{t('openInEditor')}</button>
             <button type="button" onClick={copyPath} style={buttonStyle}>{copied ? t('copied') : t('copyPath')}</button>
             {result.steered === false && (
               <button type="button" onClick={() => void sendToChat()} style={buttonStyle}>{t('sendToChat')}</button>
             )}
+            {result.steered === false && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('notSteeredHint')}</span>}
             {result.steered === true && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('steered')}</span>}
           </div>
         </div>

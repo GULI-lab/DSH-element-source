@@ -64,8 +64,14 @@ export function baseHrefOf(url: URL): string {
 }
 
 /**
- * Build the proxied HTML document: absolute probe script + `<base>` so the
- * page's own relative assets keep resolving to the dev server.
+ * Build the proxied HTML document:
+ *  - `<base>` so the page's own relative assets keep resolving to the dev
+ *    server;
+ *  - a `history.replaceState` restore so SPA routers see the ORIGINAL dev
+ *    path (the proxied document's own pathname would otherwise be
+ *    `/dsh-element-source/preview?...` and match no route → blank view);
+ *  - the probe script (absolute GUI URL, immune to the base);
+ *  - the real target URL for the probe's pageUrl.
  */
 export function buildPreviewDocument(
   html: string,
@@ -76,10 +82,12 @@ export function buildPreviewDocument(
   if (html.includes(injectScriptUrl)) return html
   const base = `<base href="${escapeHtmlAttribute(baseHrefOf(targetUrl))}">`
   const probe = `<script src="${escapeHtmlAttribute(injectScriptUrl)}"></script>`
+  const restorePath = `${targetUrl.pathname}${targetUrl.search}`
   const targetMeta = originalTarget === ''
     ? ''
     : `<script>window.__DSH_ES_TARGET__=${JSON.stringify(originalTarget)};</script>`
-  const injected = `${base}${targetMeta}${probe}`
+  const restore = `<script>try{history.replaceState(null,'',${JSON.stringify(restorePath)})}catch(e){}</script>`
+  const injected = `${base}${targetMeta}${restore}${probe}`
   const headMatch = /<head([^>]*)>/i.exec(html)
   if (headMatch !== null) {
     const at = headMatch.index + headMatch[0].length

@@ -74,11 +74,25 @@ describe('resolvePick', () => {
     const result = await resolvePick(pick({
       framework: 'vue',
       source: { file: '/src/components/Login.vue' },
-      element: { tag: 'button', classes: ['btn'], attrs: [], selector: 'div > button' },
+      element: { tag: 'button', classes: ['btn'], attrs: [], selector: 'div > button', text: '登录' },
     }), { cwd })
     if (result.ok !== true) throw new Error('expected ok')
     expect(result.relative).toBe(join('src', 'components', 'Login.vue'))
     expect(result.method).toBe('vue-file')
+  })
+
+  it('locates the line inside a __file-only vue file by clicked text', async () => {
+    const file = join(cwd, 'src', 'components', 'Card.vue')
+    await mkdir(join(cwd, 'src', 'components'), { recursive: true })
+    await writeFile(file, ['<template>', '  <div class="card">', '    <span>会员专属</span>', '  </div>', '</template>', ''].join('\n'))
+    const result = await resolvePick(pick({
+      framework: 'vue',
+      source: { file },
+      element: { tag: 'span', classes: [], attrs: [], selector: 'div > span', text: '会员专属' },
+    }), { cwd })
+    if (result.ok !== true) throw new Error('expected ok')
+    expect(result.line).toBe(3)
+    expect(result.snippet).toContain('会员专属')
   })
 
   it('keeps an exact react line and column', async () => {

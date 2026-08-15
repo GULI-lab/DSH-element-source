@@ -78,6 +78,11 @@ export function isWithin(root: string, target: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
+/** The refusal message for a source outside the session workspace. */
+export function outsideWorkspaceMessage(file: string): string {
+  return `located file is outside the session workspace: ${file} —— 请把会话工作区切换到项目目录（如侧边栏选择项目文件夹）再试 / switch the session workspace to your project and retry`
+}
+
 /** True when `raw` looks like a Windows drive path (with or without leading /). */
 function isWindowsDrive(raw: string): boolean {
   return /^(\/)?[A-Za-z]:[\\/]/.test(raw)
@@ -368,15 +373,22 @@ export async function resolvePick(pick: ElementPick, options: ResolveOptions): P
     const existing = await firstExisting(candidates)
     if (existing !== undefined) {
       if (!isWithin(cwd, existing)) {
-        return { ok: false, error: `located file is outside the session workspace: ${existing}` }
+        return { ok: false, error: outsideWorkspaceMessage(existing) }
       }
-      const method = methodFor(pick.framework, pick.source.line !== undefined)
-      const snippet = await readSnippet(existing, pick.source.line)
+      // `__file`-style probes report the file but usually not the line:
+      // locate it inside the file by the clicked text / class / id.
+      let line = pick.source.line
+      if (line === undefined) {
+        const located = await locateLineInFile(existing, pick)
+        line = located.line
+      }
+      const method = methodFor(pick.framework, line !== undefined)
+      const snippet = await readSnippet(existing, line)
       return {
         ok: true,
         file: existing,
         relative: relative(cwd, existing),
-        line: pick.source.line,
+        line,
         column: pick.source.column,
         snippet,
         method,
@@ -393,7 +405,7 @@ export async function resolvePick(pick: ElementPick, options: ResolveOptions): P
   const hit = await searchWorkspace(cwd, keys, { ...options, frameworkHint: pick.framework })
   if (hit !== undefined) {
     if (!isWithin(cwd, hit.file)) {
-      return { ok: false, error: `located file is outside the session workspace: ${hit.file}` }
+      return { ok: false, error: outsideWorkspaceMessage(hit.file) }
     }
     const snippet = await readSnippet(hit.file, hit.line)
     return {
@@ -412,7 +424,7 @@ export async function resolvePick(pick: ElementPick, options: ResolveOptions): P
     const componentHit = await searchComponent(cwd, keys.name, options)
     if (componentHit !== undefined) {
       if (!isWithin(cwd, componentHit.file)) {
-        return { ok: false, error: `located file is outside the session workspace: ${componentHit.file}` }
+        return { ok: false, error: outsideWorkspaceMessage(componentHit.file) }
       }
       const snippet = await readSnippet(componentHit.file, componentHit.line)
       return {
@@ -439,6 +451,35 @@ function methodFor(framework: ElementPick['framework'], hasLine: boolean): Resol
     case 'svelte': return hasLine ? 'svelte-source' : 'component-search'
     default: return 'component-search'
   }
+}
+
+/**
+ * Locate the line of an element within ONE already-known file (Vue `__file`
+ * reports the file but not the line): scan for the clicked text, then class
+ * names, then the id — first match wins.
+ */
+export async function locateLineInFile(file: string, pick: ElementPick, maxFileBytes = 512 * 1024): Promise<{ line?: number }> {
+  const keys = searchKeysOf(pick)
+  const patterns: string[] = []
+  if (keys.text !== undefined) patterns.push(keys.text)
+  patterns.push(...keys.classes)
+  if (keys.id !== undefined) patterns.push(keys.id)
+  if (patterns.length === 0) return {}
+  try {
+    const info = await stat(file)
+    if (info.size > maxFileBytes) return {}
+    const content = await readFile(file, 'utf8')
+    const lines = content.split(/\r?\n/)
+    for (const pattern of patterns) {
+      const regex = new RegExp(escapeRegExp(pattern), 'i')
+      for (let index = 0; index < lines.length; index += 1) {
+        if (regex.test(lines[index]!)) return { line: index + 1 }
+      }
+    }
+  } catch {
+    // Unreadable file: no line.
+  }
+  return {}
 }
 
 /** Normalize the separator in a relative path for display. */
