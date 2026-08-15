@@ -5,7 +5,7 @@
 import React from 'react'
 
 export type IconName =
-  | 'arrow-right' | 'external' | 'crosshair' | 'wifi' | 'wifi-off' | 'refresh' | 'x' | 'browser' | 'close'
+  | 'arrow-right' | 'external' | 'crosshair' | 'wifi' | 'wifi-off' | 'refresh' | 'x' | 'browser' | 'close' | 'select'
 
 const ICON_PATHS: Record<IconName, React.ReactNode> = {
   'arrow-right': <path d="M5 12h14M13 6l6 6-6 6" />,
@@ -26,6 +26,11 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
     <path d="M349.105877 287.270256m25.342707 25.342707l311.353258 311.353258q25.342707 25.342707 0 50.685414l0 0q-25.342707 25.342707-50.685414 0l-311.353258-311.353257q-25.342707-25.342707 0-50.685415l0 0q25.342707-25.342707 50.685414 0Z" fill="currentColor" stroke="none" />
     <path d="M711.144549 337.955671m-25.342707 25.342707l-311.353258 311.353257q-25.342707 25.342707-50.685414 0l0 0q-25.342707-25.342707 0-50.685414l311.353258-311.353258q25.342707-25.342707 50.685414 0l0 0q25.342707 25.342707 0 50.685415Z" fill="currentColor" stroke="none" />
   </>,
+  // The select/click icon (source file: assets/select.svg), filled.
+  select: <>
+    <path d="M620.8 179.2c12.8 12.8 6.4 32-6.4 44.8-19.2 6.4-38.4 6.4-44.8-12.8-44.8-70.4-128-115.2-217.6-115.2-140.8 0-256 115.2-256 256 0 89.6 44.8 166.4 115.2 217.6 19.2 6.4 19.2 25.6 12.8 38.4-12.8 19.2-32 19.2-44.8 12.8C89.6 563.2 32 460.8 32 352c0-179.2 140.8-320 320-320 108.8 0 211.2 57.6 268.8 147.2z" fill="currentColor" stroke="none" />
+    <path d="M326.4 332.8l243.2 601.6 83.2-243.2c6.4-19.2 19.2-32 38.4-38.4L934.4 576 326.4 332.8z m25.6-57.6L960 518.4c32 12.8 51.2 51.2 38.4 83.2-6.4 19.2-19.2 32-38.4 38.4l-243.2 83.2L633.6 960c-12.8 32-44.8 51.2-83.2 38.4-19.2-6.4-32-19.2-38.4-38.4L268.8 358.4c-12.8-32 6.4-70.4 38.4-83.2 12.8-6.4 32-6.4 44.8 0z" fill="currentColor" stroke="none" />
+  </>,
 }
 
 /** Per-icon viewBox: the stroke icons are 24px-grid; the browser brand icon
@@ -40,6 +45,7 @@ const ICON_VIEWBOX: Record<IconName, string> = {
   x: '0 0 24 24',
   browser: '0 0 1024 1024',
   close: '0 0 1024 1024',
+  select: '0 0 1024 1024',
 }
 
 /** Inline SVG icon (stroke icons are 24px-grid; the browser icon is filled). */

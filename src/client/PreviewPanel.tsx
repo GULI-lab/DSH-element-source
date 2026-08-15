@@ -196,7 +196,7 @@ export function PreviewPanel(props: { ctx: DraftContext; sessionId?: string; cwd
       {/* Toolbar: select / probe status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
         <IconButton
-          icon="crosshair"
+          icon="select"
           title={t('selectMode')}
           onClick={toggleSelecting}
           active={selecting}
