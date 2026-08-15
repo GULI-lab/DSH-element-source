@@ -25,7 +25,7 @@ import { resolveLocation, API_PREFIX } from './api.ts'
 import { appendToDraft, buildDraftText } from './draft.ts'
 
 const COPY: Record<string, { zh: string; en: string }> = {
-  addressPlaceholder: { zh: 'http://localhost:5173', en: 'http://localhost:5173' },
+  addressPlaceholder: { zh: '输入URL或正在运行的服务', en: 'Enter a URL or a running service' },
   open: { zh: '打开', en: 'Open' },
   openExternal: { zh: '外部打开', en: 'Open externally' },
   selectMode: { zh: '点击元素定位源码', en: 'Click an element to locate its source' },
