@@ -60,6 +60,7 @@
   },
   "files": [
     "lib",
+    "assets",
     "vite-plugin",
     "cordis.patch.yml",
     "README.md",
