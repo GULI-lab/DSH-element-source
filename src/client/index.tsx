@@ -246,7 +246,7 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
         <span style={{ color: accent, display: 'inline-flex' }}><Icon name="browser" size={14} /></span>
         <span>{title}</span>
         <span style={{ flex: 1 }} />
-        <IconButton icon="arrow-right" title="收起" onClick={() => setOpen(false)} />
+        <IconButton icon="close" title="收起" onClick={() => setOpen(false)} />
       </div>
       {/* Body */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
