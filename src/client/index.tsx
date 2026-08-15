@@ -60,25 +60,82 @@ function subscribeSessions(ctx: Context, fn: () => void): () => void {
   return sessions?.list?.subscribe?.(fn) ?? (() => {})
 }
 
+/** localStorage keys for the sidebar size/open state. */
+const LS_WIDTH = 'dsh-element-source.sidebarWidth'
+const LS_OPEN = 'dsh-element-source.sidebarOpen'
+
+const MIN_WIDTH = 240
+const MAX_WIDTH = 640
+
+function clampWidth(value: number): number {
+  const viewport = typeof window === 'undefined' ? 640 : window.innerWidth
+  return Math.min(Math.max(Math.round(value), MIN_WIDTH), Math.min(MAX_WIDTH, Math.round(viewport * 0.6)))
+}
+
+function readNumber(key: string, fallback: number): number {
+  try {
+    const raw = localStorage.getItem(key)
+    const value = raw === null ? Number.NaN : Number(raw)
+    return Number.isFinite(value) ? value : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function readOpen(): boolean {
+  try {
+    const raw = localStorage.getItem(LS_OPEN)
+    return raw === null ? true : raw === '1'
+  } catch {
+    return true
+  }
+}
+
+function writeOpen(open: boolean): void {
+  try { localStorage.setItem(LS_OPEN, open ? '1' : '0') } catch { /* storage unavailable */ }
+}
+
 /** The standalone right sidebar (registered in shell.overlay; open by default
- *  like a workbench sidebar, collapsible to a slim edge strip). Colors follow
- *  the DSH theme tokens so the panel matches the GUI in both light and dark
- *  themes. */
+ *  like a workbench sidebar, collapsible to a slim edge strip, resizable by
+ *  dragging its left edge). Colors follow the DSH theme tokens so the panel
+ *  matches the GUI in both light and dark themes. */
 function Launcher(props: { ctx: Context }): React.ReactElement {
   const { ctx } = props
-  const [open, setOpen] = useState(true)
+  const [open, setOpenState] = useState(readOpen)
+  const [width, setWidth] = useState(() => clampWidth(readNumber(LS_WIDTH, 320)))
   const [scope, setScope] = useState<SessionScope | undefined>(() => readSessionScope(ctx))
 
+  const setOpen = useCallback((next: boolean): void => {
+    setOpenState(next)
+    writeOpen(next)
+  }, [])
+
+  useEffect(() => { try { localStorage.setItem(LS_WIDTH, String(width)) } catch { /* storage unavailable */ } }, [width])
   useEffect(() => subscribeSessions(ctx, () => setScope(readSessionScope(ctx))), [ctx])
 
   const dismiss = useCallback((event: KeyboardEvent): void => {
     if (event.key === 'Escape') setOpen(false)
-  }, [])
+  }, [setOpen])
   useEffect(() => {
     if (!open) return
     window.addEventListener('keydown', dismiss)
     return () => window.removeEventListener('keydown', dismiss)
   }, [open, dismiss])
+
+  // Drag-to-resize: dragging the left edge right shrinks, left grows.
+  const dragState = React.useRef<{ startX: number; startWidth: number } | null>(null)
+  const startDrag = useCallback((event: React.PointerEvent<HTMLDivElement>): void => {
+    dragState.current = { startX: event.clientX, startWidth: width }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }, [width])
+  const onDragMove = useCallback((event: React.PointerEvent<HTMLDivElement>): void => {
+    const state = dragState.current
+    if (state === null) return
+    setWidth(clampWidth(state.startWidth + (state.startX - event.clientX)))
+  }, [])
+  const endDrag = useCallback((): void => {
+    dragState.current = null
+  }, [])
 
   const fill = 'var(--dsw-specific-sidebar-fill, #1b1b22)'
   const border = 'var(--dsw-alias-border-l1, #3a3f4b)'
@@ -96,14 +153,16 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
         style={{
           position: 'fixed', top: '50%', right: 0, transform: 'translateY(-50%)',
           zIndex: 2147483000, pointerEvents: 'auto',
-          width: 26, height: 96, padding: 0,
-          borderTopLeftRadius: 8, borderBottomLeftRadius: 8,
+          width: 30, height: 140, padding: 0, gap: 6,
+          borderTopLeftRadius: 10, borderBottomLeftRadius: 10,
           border: `1px solid ${border}`, borderRight: 'none',
           background: fill, color: accent, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '-2px 0 10px rgba(0,0,0,0.25)',
         }}
       >
         <Icon name="crosshair" size={16} />
+        <span style={{ writingMode: 'vertical-rl', fontSize: 11, letterSpacing: 2, opacity: 0.9 }}>{title}</span>
       </button>
     )
   }
@@ -112,12 +171,24 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
     <div
       style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 2147483000,
-        width: 380, maxWidth: '86vw', pointerEvents: 'auto',
+        width, maxWidth: '86vw', pointerEvents: 'auto',
         display: 'flex', flexDirection: 'column',
         background: fill, color: 'var(--dsw-alias-label-primary, inherit)',
         borderLeft: `1px solid ${border}`,
       }}
     >
+      {/* Drag handle */}
+      <div
+        title="拖动调整宽度"
+        onPointerDown={startDrag}
+        onPointerMove={onDragMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        style={{
+          position: 'absolute', top: 0, bottom: 0, left: -3, width: 6,
+          cursor: 'ew-resize', pointerEvents: 'auto', zIndex: 1,
+        }}
+      />
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
