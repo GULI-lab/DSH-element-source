@@ -66,35 +66,13 @@ export interface EsSystemPromptService {
   section(definition: EsSystemPromptSection): () => void
 }
 
-declare module 'cordis' {
-  interface Context {
-    webServer: EsWebServer
-    sessions: EsSessionStore
-    loader: EsLoader
-    agents: EsAgentsService
-    systemPrompt: EsSystemPromptService
-    /** DSH-vendored lifecycle helper: runs at activation, cleanup at disposal. */
-    effect(fn: () => void | (() => void), label?: string): void
-  }
-}
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    webServer: EsWebServer
-    sessions: EsSessionStore
-    loader: EsLoader
-    agents: EsAgentsService
-    systemPrompt: EsSystemPromptService
-    effect(fn: () => void | (() => void), label?: string): void
-  }
-}
-
-/** The context type both halves compile against. */
+/** The context type the host half compiles against (no global augmentation, so
+ *  it never collides with dsh-better-sidebar's own `declare module` members in
+ *  the same cordis scopes). `agents` / `systemPrompt` are read through
+ *  `ctx.get()` at the call sites and narrowed there. */
 export type Context = CordisContext & {
   webServer: EsWebServer
   sessions: EsSessionStore
   loader: EsLoader
-  agents: EsAgentsService
-  systemPrompt: EsSystemPromptService
   effect(fn: () => void | (() => void), label?: string): void
 }

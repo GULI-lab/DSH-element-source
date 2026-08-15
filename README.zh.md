@@ -42,7 +42,9 @@
 页面内探针（inject.js，IIFE、零依赖）
   └─ 悬停高亮 → 点击 → 探针链（data-insp → React __source → Vue __file → Svelte → Angular → 通用）
      → postMessage（跨域可用）→ DSH 页面
-better-sidebar「本地预览」Tab（本插件注册，可打开 localhost）
+「本地预览」入口（本插件注册，可打开 localhost）
+  ├─ 已装 dsh-better-sidebar → 侧边栏「本地预览」Tab（推荐入口）
+  └─ 未装 → 右下角悬浮十字按钮 + 独立面板（跟随当前会话）
   └─ 收 postMessage → POST /dsh-element-source/api/resolve
 DSH Host
   ├─ GET  /dsh-element-source/inject.js   （对外服务探针脚本）
@@ -54,13 +56,17 @@ DSH Host
   └─ 定位结果填入聊天输入框草稿（不自动发送），由你决定何时发送
 ```
 
+### 与 better-sidebar 的兼容
+
+插件**不依赖** better-sidebar，但**兼容**它：装了 better-sidebar 时入口是它的侧边栏 Tab（悬浮按钮不显示，避免重叠）；没装时是右下角悬浮按钮。两者路由（`/sidebar/*` vs `/dsh-element-source/*`）、postMessage 命名空间、UI 插槽完全独立，互不冲突。
+
 ### 为什么不在内置浏览器里做
 
 better-sidebar 内置浏览器的地址栏**硬性拒绝 localhost / 127.x 本机地址**（防跨站探测本机服务的安全设计），而前端 dev server 恰恰跑在 localhost。因此本插件自带一个极简的「本地预览」Tab——只是一个能打开本机地址的 iframe + 地址栏，不做多标签 / 历史等浏览器功能。如果你要预览的是**非本机地址**（例如绑定了局域网 IP 的 dev server），内置浏览器同样可用——inject.js 通过 postMessage 回传，不受沙箱影响。
 
 ## 安装
 
-**前置**：已装好 DSH（`dsh web` 可运行）与 [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)（本插件的宿主）。
+**前置**：已装好 DSH（`dsh web` 可运行）。**可选**：[dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)——装了它，入口是侧边栏「本地预览」Tab；不装，则是右下角悬浮按钮。
 
 **macOS / Linux**（Windows 装了 Git Bash 或 WSL 也可）：
 
@@ -115,9 +121,9 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 
 ## 使用
 
-1. 打开侧边栏，点「本地预览」Tab（**注意：这里打开的是你自己的开发页面，不是 DSH 界面本身**）；
+1. **打开入口**：装了 better-sidebar → 侧边栏「本地预览」Tab；没装 → 点右下角悬浮十字按钮（**注意：这里打开的是你自己的开发页面，不是 DSH 界面本身**）；
 2. 地址栏输入 `http://localhost:3000`（你的 dev server），回车；
-3. 看**探针状态图标**变绿（wifi 图标，代理模式自动就绪）；
+3. 看**探针状态图标**变绿（wifi 图标，代理自动就绪）；
 4. 点**选择**图标（十字准星），在页面里移动鼠标——目标元素高亮；**点击**即定位源码；
 5. 面板底部显示定位信息：`文件:行号` 与源码片段；
 6. **点击后结果自动填入聊天输入框**（如 `[元素定位] src/components/App.vue:12`）——不会自动发送，你可以继续补充自己的需求再回车发送。

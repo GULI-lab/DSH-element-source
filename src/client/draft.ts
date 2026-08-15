@@ -5,7 +5,13 @@
  * dsh-better-sidebar's @-mention insertion.
  */
 import type { ResolveResult } from '../protocol.ts'
-import type { Context } from '../context-types.ts'
+
+/** The minimal structural context face the draft helper needs (satisfied by
+ *  both the DSH client Context and dsh-better-sidebar's augmented Context). */
+export interface DraftContext {
+  reflect: { get(name: string): unknown }
+  sessions?: { scope?(id: string): unknown }
+}
 
 /** The draft text for one located source (agent-facing `[元素定位]` tag). */
 export function buildDraftText(result: ResolveResult): string {
@@ -25,19 +31,14 @@ interface ConversationLike {
   input: ConversationInput
 }
 
-/** The client sessions face used to reach a session's agent-scoped context. */
-interface SessionsScopeLike {
-  sessions?: { scope?(id: string): unknown }
-}
-
 /**
  * Append a located source to the session's composer draft. Never sends
  * anything; returns false (logged, no throw) when the conversation service or
  * session scope is unavailable.
  */
-export function appendToDraft(ctx: Context, sessionId: string, text: string): boolean {
+export function appendToDraft(ctx: DraftContext, sessionId: string, text: string): boolean {
   try {
-    const actx = (ctx as unknown as SessionsScopeLike).sessions?.scope?.(sessionId)
+    const actx = ctx.sessions?.scope?.(sessionId)
     if (actx === undefined) return false
     const conversation = ctx.reflect.get('conversation') as ConversationLike | undefined
     if (conversation === undefined) return false

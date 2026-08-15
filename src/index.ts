@@ -15,7 +15,7 @@
 import { readFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createUserMessage } from '@deepseek-ai/dsh-llm/message'
-import type { Context } from './context-types.ts'
+import type { Context, EsAgentsService, EsSystemPromptService } from './context-types.ts'
 import type { ElementPick, ResolveResult } from './protocol.ts'
 import { pickFromUnknown } from './protocol.ts'
 import { buildPreviewDocument, sanitizePreviewTarget } from './preview-proxy.ts'
@@ -153,7 +153,7 @@ export function apply(ctx: Context, config?: ElementSourceConfig): void {
   }), 'dsh-element-source: routes')
 
   // ── System-prompt section ───────────────────────────────────────────────
-  const systemPrompt = ctx.get('systemPrompt')
+  const systemPrompt = ctx.get('systemPrompt') as EsSystemPromptService | undefined
   if (systemPrompt !== undefined) {
     ctx.effect(() => systemPrompt.section({
       name: 'dsh-element-source',
@@ -290,7 +290,7 @@ async function maybeSteer(
   located: { relative: string; line?: number; method: ResolveResult['method'] },
 ): Promise<boolean> {
   if (!autoSteer) return false
-  const agents = ctx.get('agents')
+  const agents = ctx.get('agents') as EsAgentsService | undefined
   if (agents === undefined) return false
   const agent = agents.get(sessionId)
   if (agent === undefined) return false

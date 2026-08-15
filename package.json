@@ -90,6 +90,9 @@
   "peerDependenciesMeta": {
     "cordis": {
       "optional": true
+    },
+    "dsh-better-sidebar": {
+      "optional": true
     }
   },
   "devDependencies": {

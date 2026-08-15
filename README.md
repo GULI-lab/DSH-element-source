@@ -43,7 +43,10 @@ Proxy mode (no project changes): GET /dsh-element-source/preview?url=…
 in-page probe (inject.js: IIFE, zero deps)
   └─ hover highlight → click → probe chain (data-insp → React __source → Vue __file → Svelte → Angular → generic)
      → postMessage (cross-origin safe) → DSH page
-better-sidebar "Local preview" tab (registered by this plugin; can open localhost)
+"Local preview" entry (registered by this plugin; can open localhost)
+  ├─ dsh-better-sidebar installed → its "Local preview" tab (preferred entry)
+  └─ otherwise → a floating crosshair button (bottom-right) + panel bound to the
+     current session
   └─ receives postMessage → POST /dsh-element-source/api/resolve
 DSH Host
   ├─ GET  /dsh-element-source/inject.js   (serves the probe script publicly)
@@ -55,13 +58,17 @@ DSH Host
   └─ the located source fills the chat composer draft (never sent); you send it
 ```
 
+### dsh-better-sidebar compatibility
+
+This plugin does NOT depend on dsh-better-sidebar, but is compatible with it: with the sidebar installed the entry is its "Local preview" tab (the floating button is suppressed, so the two UIs never overlap); without it, a bottom-right floating button opens the panel. Routes (`/sidebar/*` vs `/dsh-element-source/*`), postMessage namespaces and UI slots are fully disjoint, so the two plugins coexist without conflict.
+
 ### Why not the built-in browser?
 
 The better-sidebar built-in browser **hard-refuses loopback addresses** (`localhost` / `127.x`) — a deliberate anti-DNS-rebinding design — and frontend dev servers live on localhost. This plugin therefore ships a minimal **Local preview** tab: just an iframe + address bar that CAN open local addresses (no tabs / history — it is not a browser). For **non-loopback** pages (e.g. a dev server bound to a LAN IP), the built-in browser works too — inject.js reports over postMessage regardless of the sandbox.
 
 ## Install
 
-**Prereqs**: DSH (`dsh web` runs) and [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) (the host sidebar).
+**Prereqs**: DSH (`dsh web` runs). **Optional**: [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) — with it the entry is the sidebar's "Local preview" tab; without it, a bottom-right floating button opens the panel.
 
 **macOS / Linux** (or Windows with Git Bash / WSL):
 
@@ -116,7 +123,7 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 
 ## Usage
 
-1. Open the sidebar → **Local preview** tab (**note: this previews YOUR page, not the DSH UI itself**);
+1. **Open the entry**: with better-sidebar → its **Local preview** tab; without it → click the floating crosshair button bottom-right (**note: this previews YOUR page, not the DSH UI itself**);
 2. Enter `http://localhost:3000` (your dev server) and press Enter;
 3. Watch the **probe status icon** (wifi) turn green — ready automatically in proxy mode;
 4. Click the **select** icon (crosshair), move the mouse — the target highlights; **click** to locate the source;
