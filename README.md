@@ -35,27 +35,24 @@ No build-config changes (beyond a one-line probe script), no browser extension, 
 ## How it works
 
 ```
-Two preview modes (switchable in the tab):
-  Proxy mode (default, no project changes): GET /dsh-element-source/preview?url=…
-      the plugin host fetches the dev page → injects <base href=dev-url> + probe
-      + the real-URL marker → serves it from the GUI origin (real origin, so
-      localStorage / auth work)
-  Direct mode: iframe loads the dev URL as-is (page keeps its own origin;
-      requires the probe to be present in the page)
+Proxy mode (no project changes): GET /dsh-element-source/preview?url=…
+  the plugin host fetches the dev page → injects <base href=dev-url> + probe
+  + the real-URL marker → serves it from the GUI origin (real origin, so
+  localStorage / auth work, and the probe is ready automatically)
 
-in-page probe (inject.js: IIFE, zero deps, runs inside sandboxed iframes)
+in-page probe (inject.js: IIFE, zero deps)
   └─ hover highlight → click → probe chain (data-insp → React __source → Vue __file → Svelte → Angular → generic)
      → postMessage (cross-origin safe) → DSH page
 better-sidebar "Local preview" tab (registered by this plugin; can open localhost)
   └─ receives postMessage → POST /dsh-element-source/api/resolve
 DSH Host
   ├─ GET  /dsh-element-source/inject.js   (serves the probe script publicly)
-  ├─ GET  /dsh-element-source/preview     (proxy mode: fetch + inject; loopback hosts only)
+  ├─ GET  /dsh-element-source/preview     (fetch + inject; loopback hosts only)
   ├─ POST /dsh-element-source/api/resolve (behind the browser-trust fence)
   │     ├─ path normalization (webpack /src, Vite absolute, Windows drives, configurable mappings)
   │     ├─ confinement: the located file MUST stay inside the session cwd
   │     └─ text / component search fallback for the line
-  └─ ctx.agents.get(sessionId).steer(located message) → agent reads the file → chat shows it
+  └─ the located source fills the chat composer draft (never sent); you send it
 ```
 
 ### Why not the built-in browser?
@@ -89,7 +86,7 @@ Then **hard-refresh** the browser (Ctrl/Cmd+Shift+R).
 
 ## Load the probe in your dev page (direct mode only)
 
-**Proxy mode (the default) needs NO project changes** — the plugin host injects the probe automatically. Only when you switch to **Direct mode** (the page keeps its own origin, e.g. for apps whose data layer uses same-origin relative API calls) does the dev page need to load the probe itself — pick one:
+The **Local preview** tab's proxy mode injects the probe automatically — no project changes needed. Loading the probe in your own page is only needed when you inspect with the built-in sidebar browser (non-loopback URLs) instead of this tab — pick one:
 
 **Option A — one script line.** Add to your `index.html` `<body>`:
 
@@ -120,19 +117,15 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 ## Usage
 
 1. Open the sidebar → **Local preview** tab (**note: this previews YOUR page, not the DSH UI itself**);
-2. **Mode**: **Proxy (no project changes)** is the default — the plugin forwards the page and injects the probe automatically. If your app needs same-origin API calls (relative paths), switch to **Direct** and load the probe as described above;
-3. Enter `http://localhost:3000` (your dev server) and press Enter;
-4. Watch the **probe status light** turn green (auto in proxy mode; in direct mode the page must already load the probe);
-5. Tick **Pick mode**, move the mouse — the target highlights; **click** to pick (auto-exits);
-6. The panel shows only the location: `file:line`, the method and the source snippet;
-7. **The pick fills the chat input DRAFT automatically** (e.g. `[Element located] src/components/App.vue:12`) — nothing is sent; add your own wording and press Enter.
+2. Enter `http://localhost:3000` (your dev server) and press Enter;
+3. Watch the **probe status icon** (wifi) turn green — ready automatically in proxy mode;
+4. Click the **select** icon (crosshair), move the mouse — the target highlights; **click** to locate the source;
+5. The panel shows the location: `file:line` and the source snippet;
+6. **The pick fills the chat input DRAFT automatically** (e.g. `[Element located] src/components/App.vue:12`) — nothing is sent; add your own wording and press Enter.
 
-> `Esc` cancels picking. A pick only fills the composer draft; whether to send is entirely your call.
+> `Esc` cancels selection. A pick only fills the composer draft; whether to send is entirely your call.
 
-**Two debugging aids:**
-
-- **Probe status light**: the dot in the controls row — green "Probe ready" means the probe is in the page (clicks will work); red "Probe not loaded" means it is not (shouldn't happen in proxy mode; in direct mode add the script line or the Vite plugin).
-- **Sandbox toggle** (direct mode only): ON by default (the page is isolated from DSH). If the direct page needs `localStorage` / auth, turn it OFF (page then runs same-origin with DSH — red warning; trusted pages only). Proxy mode is same-origin by design and has no toggle.
+The toolbar also has **refresh** (reload the page) and **open externally** (real browser tab).
 
 ## Configuration
 
@@ -154,9 +147,8 @@ Override the row in your `cordis.patch.yml` (or the profile patch):
 
 - `/dsh-element-source/api/resolve` and `/dsh-element-source/preview` sit behind the same browser-trust fence as the `/api` gateway (Host header + `trustedHosts`);
 - The resolved path **must** fall inside the session workspace (cwd), otherwise it is refused;
-- **Proxy mode** accepts loopback hosts only (default) and serves the page from the GUI origin — it is for trusted local dev servers; the page's relative API requests hit the DSH origin (the documented trade-off — use direct mode for same-origin data calls);
-- inject.js is read-only: it only collects click metadata and never touches DSH data; the `inject.js` route is public so dev pages can load it cross-origin (direct mode);
-- The direct-mode iframe is sandboxed by default (no `allow-same-origin` / `allow-top-navigation`), same as the built-in browser;
+- The preview accepts loopback hosts only (default) and serves the page from the GUI origin — it is for trusted local dev servers; the page's relative API requests hit the DSH origin (the documented trade-off — for same-origin data calls, use the Vite plugin + built-in browser path);
+- inject.js is read-only: it only collects click metadata and never touches DSH data; the `inject.js` route is public so dev pages can load it cross-origin;
 - `trust-fence.ts` is a behavioral copy of DSH's BSD-3-Clause implementation (attribution in the file header).
 
 ## Relation to code-inspector-plugin
@@ -176,13 +168,11 @@ Artifacts: `lib/index.js` (host), `lib/client.js` (browser half, `window.__Modul
 
 ## Known limitations
 
-- The Local preview tab targets **your own dev page**: embedding the DSH UI itself (e.g. `http://127.0.0.1:3080`) in the sandboxed iframe does not render — the GUI cannot boot under an opaque origin (localStorage throws, cross-origin bundle fetches are blocked). That is not a plugin bug;
-- **Proxy mode** serves the page from the DSH origin: relative-path API calls hit DSH instead of the dev server (apps needing same-origin data calls should use direct mode); pages with a strict CSP (`script-src 'self'`) may block the injected probe;
+- The Local preview tab targets **your own dev page**: embedding the DSH UI itself (e.g. `http://127.0.0.1:3080`) in the preview iframe does not render — the GUI cannot boot as a proxied page. That is not a plugin bug;
+- The preview serves the page from the DSH origin: relative-path API calls hit DSH instead of the dev server (for same-origin data calls, use the Vite plugin + built-in browser path); pages with a strict CSP (`script-src 'self'`) may block the injected probe;
 - Vue line numbers rely on template-text matching: icon-only / textless elements degrade to file-level (or component-definition) results;
 - Angular / Svelte need dev builds — production builds carry no runtime source info;
-- Direct mode requires the probe in the page (one line or the Vite plugin); this is forced by the same-origin policy — an iframe's DOM is unreadable from the parent, no iframe approach avoids it;
-- With the direct-mode sandbox ON the page is an opaque origin: `localStorage` / auth are restricted; turn the sandbox off when you need them (see Usage);
-- "Open in editor" requires better-sidebar's `editor` tab.
+- Using the built-in sidebar browser (non-loopback URLs) requires the page to load the probe itself (one line or the Vite plugin); this is forced by the same-origin policy — an iframe's DOM is unreadable from the parent, no iframe approach avoids it.
 
 ## License
 
