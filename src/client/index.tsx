@@ -95,6 +95,28 @@ function writeOpen(open: boolean): void {
   try { localStorage.setItem(LS_OPEN, open ? '1' : '0') } catch { /* storage unavailable */ }
 }
 
+/** The DSH app root (better-sidebar squeezes it with margin-right the same way). */
+function appRoot(): HTMLElement | null {
+  return document.getElementById('root')
+}
+
+/**
+ * Squeeze the DSH app so the chat reflows instead of being covered: set
+ * `margin-right` on `#root` equal to the sidebar width (better-sidebar's
+ * layout.css does exactly this). Width 0/undefined clears the squeeze.
+ */
+function setAppSqueeze(widthPx: number | undefined): void {
+  const root = appRoot()
+  if (root === null) return
+  if (widthPx === undefined) {
+    root.style.marginRight = ''
+    root.style.transition = ''
+    return
+  }
+  root.style.marginRight = `${widthPx}px`
+  root.style.transition = 'margin-right 150ms ease'
+}
+
 /** The standalone right sidebar (registered in shell.overlay; open by default
  *  like a workbench sidebar, collapsible to a slim edge strip, resizable by
  *  dragging its left edge). Colors follow the DSH theme tokens so the panel
@@ -112,6 +134,17 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
 
   useEffect(() => { try { localStorage.setItem(LS_WIDTH, String(width)) } catch { /* storage unavailable */ } }, [width])
   useEffect(() => subscribeSessions(ctx, () => setScope(readSessionScope(ctx))), [ctx])
+
+  // Reflow the chat: squeeze #root by the sidebar width while open (like
+  // better-sidebar), clear it when collapsed or unmounted.
+  useEffect(() => {
+    if (!open) {
+      setAppSqueeze(undefined)
+      return
+    }
+    setAppSqueeze(width)
+    return () => { setAppSqueeze(undefined) }
+  }, [open, width])
 
   const dismiss = useCallback((event: KeyboardEvent): void => {
     if (event.key === 'Escape') setOpen(false)
@@ -143,7 +176,8 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
   const title = document.documentElement.lang.toLowerCase().startsWith('zh') ? '本地预览' : 'Local preview'
 
   if (!open) {
-    // Collapsed edge strip (still a sidebar, not a floating window).
+    // Collapsed edge strip (still a sidebar, not a floating window), right
+    // below the top bar.
     return (
       <button
         type="button"
@@ -151,8 +185,7 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
         aria-label={title}
         onClick={() => setOpen(true)}
         style={{
-          position: 'fixed', top: '50%', right: 0, transform: 'translateY(-50%)',
-          zIndex: 2147483000, pointerEvents: 'auto',
+          position: 'fixed', top: 64, right: 0, zIndex: 2147483000, pointerEvents: 'auto',
           width: 30, height: 140, padding: 0, gap: 6,
           borderTopLeftRadius: 10, borderBottomLeftRadius: 10,
           border: `1px solid ${border}`, borderRight: 'none',
@@ -171,7 +204,7 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
     <div
       style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 2147483000,
-        width, maxWidth: '86vw', pointerEvents: 'auto',
+        width, pointerEvents: 'auto',
         display: 'flex', flexDirection: 'column',
         background: fill, color: 'var(--dsw-alias-label-primary, inherit)',
         borderLeft: `1px solid ${border}`,
