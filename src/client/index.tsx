@@ -256,24 +256,37 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
   )
 }
 
+/** Structural read of the (optional) better-sidebar service. */
+function betterSidebarOf(ctx: Context): BetterSidebarService | undefined {
+  return (ctx as unknown as { get?(name: string): unknown }).get?.('betterSidebar') as BetterSidebarService | undefined
+}
+
+/** Register the "Local preview" tab in better-sidebar; false when the service
+ *  is not (yet) provided. */
+function registerSidebarTab(ctx: Context): boolean {
+  const betterSidebar = betterSidebarOf(ctx)
+  if (betterSidebar === undefined) return false
+  ctx.effect(() => betterSidebar.registerTab({
+    id: OVERLAY_ID,
+    title: () => (document.documentElement.lang.toLowerCase().startsWith('zh') ? '本地预览' : 'Local preview'),
+    icon: (size: number) => React.createElement(Icon, { name: 'browser', size: Math.round(size * 0.72) }),
+    order: 60,
+    single: true,
+    component: PreviewTab,
+  }), 'dsh-element-source: better-sidebar tab')
+  return true
+}
+
 /**
  * Client plugin body. Prefers the better-sidebar tab when the sidebar is
- * installed; falls back to the standalone overlay launcher otherwise.
+ * installed; falls back to the standalone right sidebar otherwise. The choice
+ * is REACTIVE: better-sidebar may provide its service after this plugin
+ * activates, so the tab registration retries until it appears and the
+ * standalone sidebar suppresses itself while better-sidebar exists (the two
+ * UIs never overlap regardless of boot order).
  * @param ctx - the client cordis context (slots, sessions).
  */
 export function apply(ctx: Context): void {
-  const betterSidebar = (ctx as unknown as { get?(name: string): unknown }).get?.('betterSidebar') as BetterSidebarService | undefined
-  if (betterSidebar !== undefined) {
-    ctx.effect(() => betterSidebar.registerTab({
-      id: OVERLAY_ID,
-      title: () => (document.documentElement.lang.toLowerCase().startsWith('zh') ? '本地预览' : 'Local preview'),
-      icon: (size: number) => React.createElement(Icon, { name: 'browser', size: Math.round(size * 0.72) }),
-      order: 60,
-      single: true,
-      component: PreviewTab,
-    }), 'dsh-element-source: better-sidebar tab')
-    return
-  }
   const slots = (ctx as unknown as {
     slots?: {
       inject(key: string, callback: () => () => void): () => void
@@ -281,8 +294,35 @@ export function apply(ctx: Context): void {
     }
   }).slots
   if (slots === undefined) return
+  // Standalone right sidebar, gated on better-sidebar absence.
   ctx.effect(() => slots.inject('shell.overlay', () => slots.register(
     { name: 'shell.overlay', id: OVERLAY_ID, order: 100 },
-    () => React.createElement(Launcher, { ctx }),
+    () => React.createElement(StandaloneGate, { ctx }),
   )), 'dsh-element-source: overlay launcher')
+  // Tab registration: immediate, then retry until better-sidebar appears.
+  if (registerSidebarTab(ctx)) return
+  let timer = 0
+  ctx.effect(() => {
+    const attempt = (): void => {
+      if (registerSidebarTab(ctx)) return
+      if (timer < 25) timer = window.setTimeout(attempt, 400)
+    }
+    attempt()
+    return () => window.clearTimeout(timer)
+  }, 'dsh-element-source: better-sidebar tab retry')
+}
+
+/** Renders the standalone sidebar only while better-sidebar is absent, so the
+ *  two UIs never overlap regardless of service-provide timing. */
+function StandaloneGate(props: { ctx: Context }): React.ReactElement {
+  const { ctx } = props
+  const [hasBetter, setHasBetter] = useState(() => betterSidebarOf(ctx) !== undefined)
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setHasBetter(betterSidebarOf(ctx) !== undefined)
+    }, 600)
+    return () => window.clearInterval(timer)
+  }, [ctx])
+  if (hasBetter) return React.createElement(React.Fragment)
+  return React.createElement(Launcher, { ctx })
 }
