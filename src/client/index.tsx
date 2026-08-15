@@ -208,7 +208,7 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
           boxShadow: '-2px 0 10px rgba(0,0,0,0.25)',
         }}
       >
-        <Icon name="crosshair" size={16} />
+        <Icon name="browser" size={16} />
         <span style={{ writingMode: 'vertical-rl', fontSize: 11, letterSpacing: 2, opacity: 0.9 }}>{title}</span>
       </button>
     )
@@ -243,7 +243,7 @@ function Launcher(props: { ctx: Context }): React.ReactElement {
         padding: '8px 10px', borderBottom: `1px solid ${border}`,
         fontSize: 12, fontWeight: 600, flexShrink: 0,
       }}>
-        <Icon name="crosshair" size={14} color={accent} />
+        <Icon name="browser" size={14} color={accent} />
         <span>{title}</span>
         <span style={{ flex: 1 }} />
         <IconButton icon="arrow-right" title="收起" onClick={() => setOpen(false)} />
@@ -267,7 +267,7 @@ export function apply(ctx: Context): void {
     ctx.effect(() => betterSidebar.registerTab({
       id: OVERLAY_ID,
       title: () => (document.documentElement.lang.toLowerCase().startsWith('zh') ? '本地预览' : 'Local preview'),
-      icon: (size: number) => React.createElement(Icon, { name: 'crosshair', size: Math.round(size * 0.72) }),
+      icon: (size: number) => React.createElement(Icon, { name: 'browser', size: Math.round(size * 0.72) }),
       order: 60,
       single: true,
       component: PreviewTab,
