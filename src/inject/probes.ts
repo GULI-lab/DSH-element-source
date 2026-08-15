@@ -118,14 +118,22 @@ function fiberTypeName(type: unknown): string | undefined {
   return name
 }
 
-/** React dev `__source` from the nearest fiber's memoizedProps (exact). */
+/**
+ * React probe: exact `__source` from the nearest fiber's memoizedProps when
+ * the JSX transform injects it (@vitejs/plugin-react, CRA). Compilers that do
+ * NOT inject `__source` (notably @vitejs/plugin-react-swc) still yield the
+ * component display name, which the host turns into a component-definition
+ * search.
+ */
 export function probeReact(el: ProbeElement): ProbeResult | null {
   const key = reactKeyOf(el)
   if (key === undefined) return null
   const fiber = el[key] as FiberLike | null | undefined
   if (fiber === null || typeof fiber !== 'object') return null
   let current: FiberLike | null | undefined = fiber
+  let name: string | undefined
   while (current !== null && current !== undefined) {
+    if (name === undefined) name = fiberTypeName(current.elementType ?? current.type)
     const props = current.memoizedProps
     const source = props?.__source
     if (typeof source === 'object' && source !== null) {
@@ -144,7 +152,9 @@ export function probeReact(el: ProbeElement): ProbeResult | null {
     }
     current = current.return
   }
-  return null
+  // No __source (e.g. SWC): report the innermost component name so the host
+  // can still locate its definition.
+  return name === undefined ? null : { framework: 'react', name }
 }
 
 /** Vue 3 / Vue 2 dev `__file` off the element's owning component. */

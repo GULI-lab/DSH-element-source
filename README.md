@@ -125,9 +125,9 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 4. Watch the **probe status light** turn green (auto in proxy mode; in direct mode the page must already load the probe);
 5. Tick **Pick mode**, move the mouse — the target highlights; **click** to pick (auto-exits);
 6. The result panel shows `file:line` + the method; one click opens the file in the better-sidebar editor tab or copies the path;
-7. **Picking only records the result — it never disturbs the chat**: when you are ready, click **Send to chat** and the agent reads the file and shows the code, then waits for your request.
+7. **The pick fills the chat input DRAFT automatically** (e.g. `[Element located] src/components/App.vue:12`) — nothing is sent; add your own wording and press Enter, or use the panel's **Send to chat** button.
 
-> `Esc` cancels picking. A pick only fills the result panel; **Send to chat** hands it to the agent (auto-steer exists via `autoSteer`, but it defaults to off).
+> `Esc` cancels picking. A pick only fills the composer draft; whether to send is entirely your call.
 
 **Two debugging aids:**
 

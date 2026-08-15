@@ -69,7 +69,14 @@ export function baseHrefOf(url: URL): string {
  *    server;
  *  - a `history.replaceState` restore so SPA routers see the ORIGINAL dev
  *    path (the proxied document's own pathname would otherwise be
- *    `/dsh-element-source/preview?...` and match no route → blank view);
+ *    `/dsh-element-source/preview?...` and match no route → blank view). The
+ *    restore MUST use a full same-origin URL: pushState/replaceState resolve
+ *    their argument against `<base>`, which points at the (cross-origin) dev
+ *    server, so a bare path would throw a SecurityError.
+ *  - a `pushState`/`replaceState` wrapper: SPA routers navigate with
+ *    `pushState('/route')`, which would also resolve against `<base>` into
+ *    the cross-origin dev server and throw. The wrapper re-resolves such
+ *    URLs against the GUI origin so in-app navigation keeps working;
  *  - the probe script (absolute GUI URL, immune to the base);
  *  - the real target URL for the probe's pageUrl.
  */
@@ -82,12 +89,14 @@ export function buildPreviewDocument(
   if (html.includes(injectScriptUrl)) return html
   const base = `<base href="${escapeHtmlAttribute(baseHrefOf(targetUrl))}">`
   const probe = `<script src="${escapeHtmlAttribute(injectScriptUrl)}"></script>`
+  const guiOrigin = new URL(injectScriptUrl).origin
   const restorePath = `${targetUrl.pathname}${targetUrl.search}`
   const targetMeta = originalTarget === ''
     ? ''
     : `<script>window.__DSH_ES_TARGET__=${JSON.stringify(originalTarget)};</script>`
-  const restore = `<script>try{history.replaceState(null,'',${JSON.stringify(restorePath)})}catch(e){}</script>`
-  const injected = `${base}${targetMeta}${restore}${probe}`
+  const restore = `<script>try{history.replaceState(null,'',${JSON.stringify(`${guiOrigin}${restorePath}`)})}catch(e){}</script>`
+  const historyGuard = `<script>(function(){function f(n){var o=History.prototype[n];History.prototype[n]=function(s,t,u){if(u==null)return o.apply(this,arguments);var x;try{x=new URL(String(u),document.baseURI)}catch(e){return o.apply(this,arguments)}if(x.origin===location.origin)return o.apply(this,arguments);return o.call(this,s,t,location.origin+x.pathname+x.search+x.hash)}}f('pushState');f('replaceState')})();</script>`
+  const injected = `${base}${targetMeta}${restore}${historyGuard}${probe}`
   const headMatch = /<head([^>]*)>/i.exec(html)
   if (headMatch !== null) {
     const at = headMatch.index + headMatch[0].length

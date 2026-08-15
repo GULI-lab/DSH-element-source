@@ -89,6 +89,15 @@ describe('probeReact', () => {
   it('returns null without a react fiber', () => {
     expect(probeReact(node({}))).toBeNull()
   })
+
+  it('reports the component name without __source (SWC-style compilers)', () => {
+    const component: Record<string, unknown> = { type: { name: 'ChatPanel' }, memoizedProps: { children: 'x' }, return: null }
+    const host: Record<string, unknown> = { type: 'div', memoizedProps: { className: 'x' }, return: component }
+    const el = node({ ['__reactFiber$swc']: host })
+    const result = probeReact(el)
+    expect(result).toEqual({ framework: 'react', name: 'ChatPanel' })
+    expect(result?.source).toBeUndefined()
+  })
 })
 
 describe('probeVue', () => {

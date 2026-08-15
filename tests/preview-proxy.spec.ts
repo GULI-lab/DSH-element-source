@@ -60,12 +60,14 @@ describe('buildPreviewDocument', () => {
     expect(out.indexOf('<base')).toBeLessThan(out.indexOf('<title>'))
   })
 
-  it('restores the original path for SPA routers', () => {
+  it('restores the original path with a SAME-ORIGIN url (base points at the dev server)', () => {
     const html = '<head><title>x</title></head>'
     const withPath = new URL('http://localhost:5173/chat')
     const out = buildPreviewDocument(html, withPath, inject)
-    // JSON.stringify produces double quotes around the path string.
-    expect(out).toContain('history.replaceState(null,\'\',"/chat")')
+    // pushState resolves its url against <base>, so a bare path would be
+    // cross-origin and throw; the restore must use the full GUI origin.
+    expect(out).toContain('history.replaceState(null,\'\',"http://127.0.0.1:3080/chat")')
+    expect(out).not.toContain("history.replaceState(null,'','/chat')")
     // The restore runs before the page's own scripts (right after <head>).
     expect(out.indexOf('history.replaceState')).toBeLessThan(out.indexOf('<title>'))
   })
@@ -74,7 +76,13 @@ describe('buildPreviewDocument', () => {
     const html = '<head></head>'
     const withQuery = new URL('http://localhost:5173/?tab=1')
     const out = buildPreviewDocument(html, withQuery, inject)
-    expect(out).toContain('history.replaceState(null,\'\',"/?tab=1")')
+    expect(out).toContain('history.replaceState(null,\'\',"http://127.0.0.1:3080/?tab=1")')
+  })
+
+  it('wraps pushState/replaceState so in-app router navigation survives the base', () => {
+    const out = buildPreviewDocument('<head></head>', target, inject)
+    expect(out).toContain("f('pushState')")
+    expect(out).toContain("f('replaceState')")
   })
 
   it('falls back to prepending when there is no <head>', () => {

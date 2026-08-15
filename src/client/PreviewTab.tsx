@@ -19,6 +19,7 @@ import {
   type ResolveResult,
 } from '../protocol.ts'
 import { resolveLocation, API_PREFIX } from './api.ts'
+import { appendToDraft, buildDraftText } from './draft.ts'
 
 /** Same sandbox tokens as the built-in browser: no same-origin, no top-navigation. */
 const IFRAME_SANDBOX =
@@ -48,6 +49,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   copied: { zh: '已复制', en: 'Copied' },
   sendToChat: { zh: '发送到聊天', en: 'Send to chat' },
   notSteeredHint: { zh: '点击只记录结果，尚未通知助手——确认后点「发送到聊天」', en: 'Pick recorded only; the agent is not notified yet — click "Send to chat" when ready' },
+  draftFilled: { zh: '已填入聊天输入框，可继续输入后自行发送', en: 'Filled into the chat input — add your wording and send when ready' },
   steered: { zh: '已通知助手，聊天将展示源码', en: 'Agent notified; the chat will show the source' },
   methodLabel: { zh: '定位方式', en: 'Method' },
   noUrl: { zh: '先输入地址打开页面', en: 'Enter a URL first' },
@@ -78,6 +80,8 @@ export function PreviewTab(props: TabComponentProps) {
   const [result, setResult] = useState<ResolveResult | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // Whether the located source was placed into the chat composer draft.
+  const [draftFilled, setDraftFilled] = useState(false)
   // Preview mode: proxy forwards the page through the plugin host and
   // auto-injects the probe (zero project changes); direct loads the URL as-is
   // and needs the probe present in the page.
@@ -148,7 +152,12 @@ export function PreviewTab(props: TabComponentProps) {
       })
       setResult(located)
       setStatus(null)
-      if (!located.ok) {
+      if (located.ok === true) {
+        // Fill the chat composer draft (never send): the user decides.
+        const filled = appendToDraft(ctx, scope.sessionId, buildDraftText(located))
+        setDraftFilled(filled)
+      } else {
+        setDraftFilled(false)
         const cwdHint = scope.cwd !== undefined && scope.cwd !== ''
           ? `（会话工作区：${scope.cwd}）`
           : ''
@@ -156,9 +165,10 @@ export function PreviewTab(props: TabComponentProps) {
       }
     } catch (error) {
       setResult(null)
+      setDraftFilled(false)
       setStatus(error instanceof Error ? error.message : String(error))
     }
-  }, [scope, t])
+  }, [scope, t, ctx])
 
   const sendToChat = useCallback(async (): Promise<void> => {
     if (result === null || result.ok !== true || result.file === undefined) return
@@ -355,7 +365,8 @@ export function PreviewTab(props: TabComponentProps) {
             {result.steered === false && (
               <button type="button" onClick={() => void sendToChat()} style={buttonStyle}>{t('sendToChat')}</button>
             )}
-            {result.steered === false && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('notSteeredHint')}</span>}
+            {result.steered === false && draftFilled && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('draftFilled')}</span>}
+            {result.steered === false && !draftFilled && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('notSteeredHint')}</span>}
             {result.steered === true && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('steered')}</span>}
           </div>
         </div>
