@@ -18,19 +18,28 @@ import {
   type ElementPick,
   type ResolveResult,
 } from '../protocol.ts'
-import { resolveLocation } from './api.ts'
+import { resolveLocation, API_PREFIX } from './api.ts'
 
 /** Same sandbox tokens as the built-in browser: no same-origin, no top-navigation. */
 const IFRAME_SANDBOX =
   'allow-scripts allow-forms allow-popups allow-downloads allow-modals allow-popups-to-escape-sandbox'
 
 const COPY: Record<string, { zh: string; en: string }> = {
-  addressPlaceholder: { zh: '输入地址，如 http://localhost:5173', en: 'Enter a URL, e.g. http://localhost:5173' },
+  addressPlaceholder: { zh: '输入你的开发页面地址，如 http://localhost:5173', en: 'Enter your dev page URL, e.g. http://localhost:5173' },
+  addressHint: { zh: '这里预览你自己的页面，不是 DSH 界面', en: 'This previews YOUR page, not the DSH UI itself' },
   go: { zh: '打开', en: 'Go' },
   openExternal: { zh: '外部打开', en: 'Open externally' },
   pickMode: { zh: '拾取模式', en: 'Pick mode' },
-  pickModeOn: { zh: '开启后点击页面元素即可定位源码', en: 'Click any page element to locate its source' },
   pickModeHint: { zh: '在页面内移动鼠标高亮目标，点击后自动退出拾取', en: 'Hover to highlight, click to pick (auto-exits)' },
+  sandbox: { zh: '沙箱', en: 'Sandbox' },
+  sandboxHint: { zh: '开启后页面与 DSH 隔离；关掉才能让 dev 页面用 localStorage/登录态', en: 'Isolates the page from DSH; turn off so the dev page can use localStorage/auth' },
+  sandboxOffWarning: { zh: '沙箱已关闭：页面与 DSH 同源，可访问本地数据，仅用于你完全信任的页面', en: 'Sandbox OFF: the page runs same-origin with DSH and can access local data — trusted pages only' },
+  modeProxy: { zh: '代理模式（免改项目）', en: 'Proxy (no project changes)' },
+  modeDirect: { zh: '直连模式', en: 'Direct' },
+  proxyNote: { zh: '代理模式：插件转发页面并自动注入探针，无需修改项目代码；页面与 DSH 同源，仅用于你信任的本机 dev server', en: 'Proxy mode: the plugin forwards the page and injects the probe automatically — no project changes needed; the page runs same-origin with DSH, local trusted dev servers only' },
+  directNote: { zh: '直连模式：页面保持自身源；点击定位需要页面加载探针（index.html 加一行，或用 Vite 插件）', en: 'Direct mode: the page keeps its own origin; picking needs the probe loaded in the page (one script line, or the Vite plugin)' },
+  probeReady: { zh: '探针已就绪', en: 'Probe ready' },
+  probeMissing: { zh: '页面未加载探针（点击不会生效）', en: 'Probe not loaded on this page (clicks will do nothing)' },
   resolving: { zh: '正在定位源码…', en: 'Locating source…' },
   located: { zh: '已定位', en: 'Located' },
   notLocated: { zh: '未能定位', en: 'Not located' },
@@ -68,6 +77,15 @@ export function PreviewTab(props: TabComponentProps) {
   const [result, setResult] = useState<ResolveResult | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // Preview mode: proxy forwards the page through the plugin host and
+  // auto-injects the probe (zero project changes); direct loads the URL as-is
+  // and needs the probe present in the page.
+  const [mode, setMode] = useState<'proxy' | 'direct'>('proxy')
+  const [navigationId, setNavigationId] = useState(0)
+  // Sandbox only applies in direct mode; proxy mode is same-origin by design.
+  const [sandboxed, setSandboxed] = useState(true)
+  // Whether inject.js announced itself from the current page (hello message).
+  const [probeReady, setProbeReady] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   // The last validated pick, kept for re-steer ("发送到聊天").
   const lastPickRef = useRef<ElementPick | null>(null)
@@ -82,6 +100,14 @@ export function PreviewTab(props: TabComponentProps) {
     frame.contentWindow.postMessage(message, '*')
   }, [])
 
+  const changeMode = (next: 'proxy' | 'direct'): void => {
+    if (next === mode) return
+    setMode(next)
+    setResult(null)
+    setStatus(null)
+    setProbeReady(false)
+  }
+
   const navigate = (raw: string): void => {
     const normalized = normalizePreviewUrl(raw)
     if (normalized.kind === 'ok') {
@@ -89,10 +115,20 @@ export function PreviewTab(props: TabComponentProps) {
       setInput(normalized.url)
       setResult(null)
       setStatus(null)
+      setProbeReady(false)
+      setNavigationId(id => id + 1)
       return
     }
     setStatus(normalized.kind === 'blocked' ? '仅支持 http/https 地址' : t('addressPlaceholder'))
   }
+
+  // The iframe source: proxied document (same-origin, probe auto-injected) or
+  // the direct URL. `navigationId` keeps the src stable across re-renders and
+  // forces a fresh proxied document on each navigation.
+  const iframeSrc = url === undefined ? undefined : mode === 'proxy'
+    ? `${API_PREFIX}/preview?url=${encodeURIComponent(url)}&v=${navigationId}`
+    : url
+  const effectiveSandbox = mode === 'direct' && sandboxed ? IFRAME_SANDBOX : undefined
 
   const handlePick = useCallback(async (rawPick: unknown): Promise<void> => {
     const pick = pickFromUnknown(rawPick)
@@ -137,14 +173,16 @@ export function PreviewTab(props: TabComponentProps) {
     }
   }, [result, scope, t])
 
-  // Probe messages from the iframe (pick results, cancel).
+  // Probe messages from the iframe (hello, pick results, cancel).
   useEffect(() => {
     const onMessage = (event: MessageEvent): void => {
       const frame = iframeRef.current
       if (frame === null || event.source !== frame.contentWindow) return
       if (!isProbeMessage(event.data)) return
       const data = event.data as Record<string, unknown>
-      if (data.type === 'dsh-es:pick') {
+      if (data.type === 'dsh-es:hello') {
+        setProbeReady(true)
+      } else if (data.type === 'dsh-es:pick') {
         const pick = pickFromUnknown(data.pick)
         if (pick !== undefined) {
           rememberPick(pick)
@@ -209,16 +247,55 @@ export function PreviewTab(props: TabComponentProps) {
           </button>
         )}
       </div>
+      {url === undefined && <div style={{ fontSize: 11, opacity: 0.6 }}>{t('addressHint')}</div>}
 
-      {/* Pick-mode toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* Mode selector */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+          <input type="radio" name="es-mode" checked={mode === 'proxy'} onChange={() => changeMode('proxy')} />
+          <span>{t('modeProxy')}</span>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+          <input type="radio" name="es-mode" checked={mode === 'direct'} onChange={() => changeMode('direct')} />
+          <span>{t('modeDirect')}</span>
+        </label>
+        <span style={{ fontSize: 11, opacity: 0.7 }}>{mode === 'proxy' ? t('proxyNote') : t('directNote')}</span>
+      </div>
+
+      {/* Controls: pick mode, sandbox (direct only), probe status */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
           <input type="checkbox" checked={picking} disabled={url === undefined} onChange={togglePicking} />
           <span>{t('pickMode')}</span>
         </label>
+        {mode === 'direct' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', opacity: url === undefined ? 0.5 : 1 }} title={t('sandboxHint')}>
+            <input
+              type="checkbox"
+              checked={sandboxed}
+              disabled={url === undefined}
+              onChange={event => setSandboxed(event.target.checked)}
+            />
+            <span>{t('sandbox')}</span>
+          </label>
+        )}
+        {url !== undefined && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: '50%', display: 'inline-block',
+              background: probeReady ? '#2ecc71' : '#e74c3c',
+            }} />
+            <span style={{ opacity: 0.85 }}>{probeReady ? t('probeReady') : t('probeMissing')}</span>
+          </span>
+        )}
         {picking && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('pickModeHint')}</span>}
         {!picking && url === undefined && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('noUrl')}</span>}
       </div>
+      {url !== undefined && mode === 'direct' && !sandboxed && (
+        <div style={{ fontSize: 11, borderRadius: 6, padding: '4px 8px', border: '1px solid #e74c3c', color: '#e74c3c' }}>
+          {t('sandboxOffWarning')}
+        </div>
+      )}
 
       {/* Preview iframe */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--dsw-border, #3a3f4b)' }}>
@@ -229,11 +306,12 @@ export function PreviewTab(props: TabComponentProps) {
         ) : (
           <iframe
             ref={iframeRef}
-            src={url}
-            sandbox={IFRAME_SANDBOX}
+            src={iframeSrc}
+            sandbox={effectiveSandbox}
             referrerPolicy="no-referrer"
             allow=""
             title={url}
+            onLoad={() => postToProbe({ type: 'dsh-es:ping' })}
             style={{ width: '100%', height: '100%', border: 0 }}
           />
         )}

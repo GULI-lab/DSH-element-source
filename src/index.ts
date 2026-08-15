@@ -18,6 +18,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm/message'
 import type { Context } from './context-types.ts'
 import type { ElementPick, ResolveResult } from './protocol.ts'
 import { pickFromUnknown } from './protocol.ts'
+import { buildPreviewDocument, sanitizePreviewTarget } from './preview-proxy.ts'
 import { resolvePick, type SourceMapping } from './resolve.ts'
 import { buildSteerText } from './steer.ts'
 import { isTrustedApiRequest } from './trust-fence.ts'
@@ -40,6 +41,12 @@ export interface ElementSourceConfig {
   mappings?: readonly SourceMapping[]
   /** Session id pinned by configuration, ignoring the request's sessionId. */
   sessionId?: string
+  /** Extra hostnames (beyond loopback) the preview proxy may fetch. */
+  proxyHosts?: readonly string[]
+  /** Max bytes of the proxied HTML document. Default 4 MiB. */
+  proxyMaxBytes?: number
+  /** Preview proxy fetch timeout in milliseconds. Default 8000. */
+  proxyTimeoutMs?: number
 }
 
 const SYSTEM_PROMPT_SECTION = [
@@ -102,8 +109,7 @@ function parseResolvePayload(payload: unknown): ResolvePayload {
 export function apply(ctx: Context, config?: ElementSourceConfig): void {
   const resolved: Required<Pick<ElementSourceConfig, 'autoSteer'>> & ElementSourceConfig = {
     autoSteer: config?.autoSteer ?? true,
-    mappings: config?.mappings,
-    sessionId: config?.sessionId,
+    ...config,
   }
   const fence = (req: IncomingMessage): boolean => isTrustedApiRequest(req, trustedHostsOf(ctx))
 
@@ -132,6 +138,10 @@ export function apply(ctx: Context, config?: ElementSourceConfig): void {
         await handleResolve(ctx, resolved, fence, req, res)
         return
       }
+      if (pathname === `${ROUTE_PREFIX}/preview` && (req.method === 'GET' || req.method === 'HEAD')) {
+        await handlePreview(resolved, fence, req, res)
+        return
+      }
       writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown route ${pathname}` } })
     },
   }), 'dsh-element-source: routes')
@@ -144,6 +154,66 @@ export function apply(ctx: Context, config?: ElementSourceConfig): void {
       order: 60,
       text: SYSTEM_PROMPT_SECTION,
     }), 'dsh-element-source: system prompt section')
+  }
+}
+
+/** Handle one zero-modification preview request: fetch + inject + serve. */
+async function handlePreview(
+  config: ElementSourceConfig,
+  fence: (req: IncomingMessage) => boolean,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  if (!fence(req)) {
+    writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } })
+    return
+  }
+  const urlParam = new URL(req.url ?? '/', 'http://dsh.internal').searchParams.get('url')
+  if (urlParam === null || urlParam === '') {
+    writeJson(res, 400, { ok: false, error: { code: 'bad-request', message: 'missing "url" query parameter' } })
+    return
+  }
+  const target = sanitizePreviewTarget(urlParam, config.proxyHosts)
+  if (target.kind === 'invalid') {
+    writeJson(res, 400, { ok: false, error: { code: 'bad-request', message: 'invalid preview URL' } })
+    return
+  }
+  if (target.kind === 'blocked') {
+    writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: `preview target refused (${target.reason}): only local http(s) hosts` } })
+    return
+  }
+  try {
+    const maxBytes = config.proxyMaxBytes ?? 4 * 1024 * 1024
+    const timeoutMs = config.proxyTimeoutMs ?? 8000
+    const response = await fetch(target.url, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!response.ok) {
+      writeJson(res, 502, { ok: false, error: { code: 'resolve-error', message: `target answered HTTP ${response.status}` } })
+      return
+    }
+    const contentType = response.headers.get('content-type') ?? ''
+    if (!contentType.includes('text/html')) {
+      writeJson(res, 415, { ok: false, error: { code: 'bad-request', message: 'preview target is not an HTML page' } })
+      return
+    }
+    const html = await response.text()
+    if (html.length > maxBytes) {
+      writeJson(res, 413, { ok: false, error: { code: 'bad-request', message: 'preview target exceeds the size limit' } })
+      return
+    }
+    const finalUrl = response.url !== '' ? new URL(response.url) : target.url
+    const injectScriptUrl = `http://${req.headers.host}${ROUTE_PREFIX}/inject.js`
+    const document = buildPreviewDocument(html, finalUrl, injectScriptUrl, target.url.href)
+    res.writeHead(200, {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+    })
+    res.end(req.method === 'HEAD' ? undefined : document)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    writeJson(res, 502, { ok: false, error: { code: 'resolve-error', message: `cannot fetch preview target: ${message}` } })
   }
 }
 

@@ -134,7 +134,11 @@ if (win[MARKER] !== true) {
       source: best?.source,
       name: best?.name,
       element: describeElement(element),
-      pageUrl: window.location.href,
+      // The proxy injects the real dev URL via __DSH_ES_TARGET__; fall back to
+      // the current (possibly proxied) location.
+      pageUrl: typeof (window as unknown as Record<string, unknown>).__DSH_ES_TARGET__ === 'string'
+        ? (window as unknown as Record<string, unknown>).__DSH_ES_TARGET__ as string
+        : window.location.href,
     }
     post({ type: 'dsh-es:pick', pick })
     exitMode('done')

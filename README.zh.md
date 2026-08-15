@@ -35,19 +35,25 @@
 ## 工作原理
 
 ```
-dev 页面（index.html 一行 <script>，或 Vite 插件自动注入）
-  └─ inject.js（页面内探针，IIFE、零依赖、可运行在沙箱 iframe 内）
-       悬停高亮 → 点击 → 探针链（data-insp → React __source → Vue __file → Svelte → Angular → 通用）
-       → postMessage（跨域可用）→ DSH 页面
-  └─ better-sidebar「本地预览」Tab（本插件注册，可打开 localhost）
-       收 postMessage → POST /dsh-element-source/api/resolve
-  └─ DSH Host
-       ├─ GET  /dsh-element-source/inject.js   （对外服务探针脚本）
-       ├─ POST /dsh-element-source/api/resolve （信任围栏保护）
-       │     ├─ 路径规范化（webpack /src、Vite 绝对路径、Windows 盘符、可配置 mappings）
-       │     ├─ 越界检查：定位结果必须落在会话 cwd 内
-       │     └─ 文本 / 组件搜索兜底定位行号
-       └─ ctx.agents.get(sessionId).steer(定位消息) → 助手 read 文件 → 聊天展示
+两种预览模式（Tab 内可切换）：
+  代理模式（默认，免改项目）：GET /dsh-element-source/preview?url=…
+      插件 host 取回 dev 页面 → 注入 <base href=dev地址> + 探针脚本 + 真实地址标记
+      → 从 GUI 源返回（页面获得真实 origin，localStorage/登录态正常）
+  直连模式：iframe 直接打开 dev 地址（页面保持自身源；需要页面里已有探针）
+
+页面内探针（inject.js，IIFE、零依赖、可运行在沙箱 iframe 内）
+  └─ 悬停高亮 → 点击 → 探针链（data-insp → React __source → Vue __file → Svelte → Angular → 通用）
+     → postMessage（跨域可用）→ DSH 页面
+better-sidebar「本地预览」Tab（本插件注册，可打开 localhost）
+  └─ 收 postMessage → POST /dsh-element-source/api/resolve
+DSH Host
+  ├─ GET  /dsh-element-source/inject.js   （对外服务探针脚本）
+  ├─ GET  /dsh-element-source/preview     （代理模式：取回页面 + 注入探针，仅限本机地址）
+  ├─ POST /dsh-element-source/api/resolve （信任围栏保护）
+  │     ├─ 路径规范化（webpack /src、Vite 绝对路径、Windows 盘符、可配置 mappings）
+  │     ├─ 越界检查：定位结果必须落在会话 cwd 内
+  │     └─ 文本 / 组件搜索兜底定位行号
+  └─ ctx.agents.get(sessionId).steer(定位消息) → 助手 read 文件 → 聊天展示
 ```
 
 ### 为什么不在内置浏览器里做
@@ -79,7 +85,9 @@ npx -y --package @deepseek-ai/dsh dsh plugin --profile web add dsh-element-sourc
 
 装完**硬刷新浏览器**（Ctrl/Cmd+Shift+R）。
 
-## 让 dev 页面加载探针（二选一）
+## 探针加载（仅直连模式需要）
+
+**代理模式（默认）不需要改项目**——插件 host 自动注入探针。只有当你切换到**直连模式**（页面保持自身源，用于需要同源 API 的应用）时，才需要让 dev 页面自己加载探针，二选一：
 
 **方式 A：手动加一行 script**。在你的 `index.html` 的 `<body>` 里加：
 
@@ -109,14 +117,20 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 
 ## 使用
 
-1. 打开侧边栏，点「本地预览」Tab；
-2. 地址栏输入 `http://localhost:5173`（你的 dev server），回车；
-3. 勾选「拾取模式」；
-4. 在预览页面里移动鼠标——目标元素高亮并显示定位信息；**点击**即完成拾取，自动退出拾取模式；
-5. 结果面板显示 `文件:行号` 与定位方式，可一键「在编辑器打开」（better-sidebar 编辑器 Tab）或「复制路径」；
-6. 默认情况下插件已自动唤醒助手：聊天里出现「元素定位」消息，助手读取文件并展示源码，等你提出修改需求。
+1. 打开侧边栏，点「本地预览」Tab（**注意：这里打开的是你自己的开发页面，不是 DSH 界面本身**）；
+2. **模式**：默认「代理模式（免改项目）」——插件自动转发页面并注入探针；如果你的应用需要同源 API（相对路径请求），切换到「直连模式」并按需加载探针；
+3. 地址栏输入 `http://localhost:3000`（你的 dev server），回车；
+4. 看**探针状态灯**变绿（代理模式自动就绪；直连模式需页面已加载探针）；
+5. 勾选「拾取模式」，在页面里移动鼠标——目标元素高亮；**点击**即完成拾取，自动退出；
+6. 结果面板显示 `文件:行号` 与定位方式，可一键「在编辑器打开」或「复制路径」；
+7. 默认情况下插件已自动唤醒助手：聊天里出现「元素定位」消息，助手读取文件并展示源码，等你提出修改需求。
 
 > `Esc` 取消拾取。点击「发送到聊天」可手动把上一条拾取结果交给助手（当 `autoSteer` 关闭时）。
+
+**两个调试辅助**：
+
+- **探针状态灯**：控制行的小圆点——绿色「探针已就绪」表示探针已注入（点击会生效）；红色「页面未加载探针」表示没有（代理模式下不应出现；直连模式下去 index.html 加 script 行，或加 Vite 插件）。
+- **沙箱开关**（仅直连模式）：默认开启（页面与 DSH 隔离）。直连页面需要 `localStorage` / 登录态时，**关掉沙箱**（页面将与 DSH 同源，带红色警告，仅用于你完全信任的页面）。代理模式下页面本就与 DSH 同源，无需开关。
 
 ## 配置
 
@@ -129,15 +143,18 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
     mappings:               # 源码路径前缀映射（monorepo / node_modules 重定向）
       - find: '@app/ui/src'
         replacement: 'D:/workspace/my-app/packages/ui/src'
+    proxyHosts:             # 代理模式额外放行的 host（默认仅本机回环地址）
+      - '192.168.1.10'
     sessionId: 'fixed-session'  # 固定会话（一般不需要）
 ```
 
 ## 安全
 
-- `/dsh-element-source/api/resolve` 走与 `/api` 网关相同的浏览器信任围栏（Host 头 + `trustedHosts`）；
+- `/dsh-element-source/api/resolve` 与 `/dsh-element-source/preview` 都走与 `/api` 网关相同的浏览器信任围栏（Host 头 + `trustedHosts`）；
 - 解析出的文件路径**必须落在会话工作区（cwd）内**，否则拒绝；
-- inject.js 是只读代码，只收集点击元素的元数据，不访问 DSH 数据；`inject.js` 路由对外公开（dev 页面要跨域加载它）；
-- 预览 iframe 默认沙箱（无 `allow-same-origin` / `allow-top-navigation`），与内置浏览器一致；
+- **代理模式**只允许本机回环地址（默认），且返回的页面与 DSH 同源——它只能承载你信任的本地 dev server；页面相对路径的 API 请求会打到 DSH 源（这是该模式的已知代价，需要同源 API 请用直连模式）；
+- inject.js 是只读代码，只收集点击元素的元数据，不访问 DSH 数据；`inject.js` 路由对外公开（直连模式下 dev 页面要跨域加载它）；
+- 直连模式的 iframe 默认沙箱（无 `allow-same-origin` / `allow-top-navigation`），与内置浏览器一致；
 - `trust-fence.ts` 源自 DSH 的 BSD-3-Clause 实现（行为一致，独立拷贝，见文件头注释）。
 
 ## 与 code-inspector-plugin 的关系
@@ -157,11 +174,13 @@ pnpm build         # tsc 类型 + tsdown 双端产物（lib/index.js、lib/clien
 
 ## 已知限制
 
+- 本地预览 Tab 面向**你自己的开发页面**：把 DSH 界面本身（如 `http://127.0.0.1:3080`）放进沙箱 iframe 不会渲染——GUI 无法在 opaque origin 下启动（localStorage 抛错、跨域拉取 bundle 被拦），这不是本插件的 bug；
+- **代理模式**下页面从 DSH 源加载：相对路径的 API 请求会打到 DSH 源而非 dev server（需要同源数据接口的应用请用直连模式）；页面自带严格 CSP（如 `script-src 'self'`）的极少数应用可能拦掉注入的探针；
 - Vue 的行号依赖模板文本匹配：纯图标 / 无文本元素会退化为「只定位文件」或组件定义行；
 - Angular / Svelte 生产构建不带运行期源码信息，需 dev 构建；
-- 探针脚本需要 dev 页面加载（手动一行或 Vite 插件）；这是跨域 iframe 无法从父页面读取 DOM 的同源策略决定的，任何 iframe 方案都绕不开；
-- 「在编辑器打开」依赖 better-sidebar 的 `editor` Tab 存在；
-- 预览 iframe 内页面与侧边栏跨域，登录态 / Cookie 行为与内置浏览器一致受限。
+- 直连模式的探针需要 dev 页面加载（手动一行或 Vite 插件）；这是跨域 iframe 无法从父页面读取 DOM 的同源策略决定的，任何 iframe 方案都绕不开；
+- 直连模式沙箱开启时页面为 opaque origin，`localStorage` / 登录态受限；需要时请关掉沙箱（见「使用」）；
+- 「在编辑器打开」依赖 better-sidebar 的 `editor` Tab 存在。
 
 ## License
 
