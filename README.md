@@ -124,8 +124,8 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 3. Enter `http://localhost:3000` (your dev server) and press Enter;
 4. Watch the **probe status light** turn green (auto in proxy mode; in direct mode the page must already load the probe);
 5. Tick **Pick mode**, move the mouse — the target highlights; **click** to pick (auto-exits);
-6. The result panel shows `file:line` + the method; one click opens the file in the better-sidebar editor tab or copies the path;
-7. **The pick fills the chat input DRAFT automatically** (e.g. `[Element located] src/components/App.vue:12`) — nothing is sent; add your own wording and press Enter, or use the panel's **Send to chat** button.
+6. The panel shows only the location: `file:line`, the method and the source snippet;
+7. **The pick fills the chat input DRAFT automatically** (e.g. `[Element located] src/components/App.vue:12`) — nothing is sent; add your own wording and press Enter.
 
 > `Esc` cancels picking. A pick only fills the composer draft; whether to send is entirely your call.
 
@@ -141,7 +141,7 @@ Override the row in your `cordis.patch.yml` (or the profile patch):
 ```yaml
 - id: element-source
   config:
-    autoSteer: false        # wake the agent right after a pick (default false: use "Send to chat")
+    autoSteer: false        # wake the agent right after a pick (default false: only fill the chat draft)
     mappings:               # source-path prefix mappings (monorepo / node_modules rebasing)
       - find: '@app/ui/src'
         replacement: 'D:/workspace/my-app/packages/ui/src'

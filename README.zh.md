@@ -122,8 +122,8 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 3. 地址栏输入 `http://localhost:3000`（你的 dev server），回车；
 4. 看**探针状态灯**变绿（代理模式自动就绪；直连模式需页面已加载探针）；
 5. 勾选「拾取模式」，在页面里移动鼠标——目标元素高亮；**点击**即完成拾取，自动退出；
-6. 结果面板显示 `文件:行号` 与定位方式，可一键「在编辑器打开」或「复制路径」；
-7. **点击后结果自动填入聊天输入框**（如 `[元素定位] src/components/App.vue:12`）——不会自动发送，你可以继续补充自己的需求再回车发送；也可直接点面板里的「发送到聊天」。
+6. 面板底部只显示定位信息：`文件:行号`、定位方式与源码片段；
+7. **点击后结果自动填入聊天输入框**（如 `[元素定位] src/components/App.vue:12`）——不会自动发送，你可以继续补充自己的需求再回车发送。
 
 > `Esc` 取消拾取。点击只把定位结果填入聊天输入框（草稿），发送与否完全由你决定。
 
@@ -139,7 +139,7 @@ dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 ```yaml
 - id: element-source
   config:
-    autoSteer: false        # 拾取后自动唤醒助手（默认 false：点「发送到聊天」才通知）
+    autoSteer: false        # 拾取后自动唤醒助手（默认 false：只填聊天输入框草稿）
     mappings:               # 源码路径前缀映射（monorepo / node_modules 重定向）
       - find: '@app/ui/src'
         replacement: 'D:/workspace/my-app/packages/ui/src'

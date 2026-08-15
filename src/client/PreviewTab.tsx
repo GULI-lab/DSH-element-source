@@ -15,7 +15,6 @@ import {
   isProbeMessage,
   normalizePreviewUrl,
   pickFromUnknown,
-  type ElementPick,
   type ResolveResult,
 } from '../protocol.ts'
 import { resolveLocation, API_PREFIX } from './api.ts'
@@ -42,15 +41,7 @@ const COPY: Record<string, { zh: string; en: string }> = {
   probeReady: { zh: '探针已就绪', en: 'Probe ready' },
   probeMissing: { zh: '页面未加载探针（点击不会生效）', en: 'Probe not loaded on this page (clicks will do nothing)' },
   resolving: { zh: '正在定位源码…', en: 'Locating source…' },
-  located: { zh: '已定位', en: 'Located' },
   notLocated: { zh: '未能定位', en: 'Not located' },
-  openInEditor: { zh: '在编辑器打开', en: 'Open in editor' },
-  copyPath: { zh: '复制路径', en: 'Copy path' },
-  copied: { zh: '已复制', en: 'Copied' },
-  sendToChat: { zh: '发送到聊天', en: 'Send to chat' },
-  notSteeredHint: { zh: '点击只记录结果，尚未通知助手——确认后点「发送到聊天」', en: 'Pick recorded only; the agent is not notified yet — click "Send to chat" when ready' },
-  draftFilled: { zh: '已填入聊天输入框，可继续输入后自行发送', en: 'Filled into the chat input — add your wording and send when ready' },
-  steered: { zh: '已通知助手，聊天将展示源码', en: 'Agent notified; the chat will show the source' },
   methodLabel: { zh: '定位方式', en: 'Method' },
   noUrl: { zh: '先输入地址打开页面', en: 'Enter a URL first' },
 }
@@ -79,9 +70,6 @@ export function PreviewTab(props: TabComponentProps) {
   const [picking, setPicking] = useState(false)
   const [result, setResult] = useState<ResolveResult | null>(null)
   const [status, setStatus] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  // Whether the located source was placed into the chat composer draft.
-  const [draftFilled, setDraftFilled] = useState(false)
   // Preview mode: proxy forwards the page through the plugin host and
   // auto-injects the probe (zero project changes); direct loads the URL as-is
   // and needs the probe present in the page.
@@ -92,12 +80,6 @@ export function PreviewTab(props: TabComponentProps) {
   // Whether inject.js announced itself from the current page (hello message).
   const [probeReady, setProbeReady] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  // The last validated pick, kept for re-steer ("发送到聊天").
-  const lastPickRef = useRef<ElementPick | null>(null)
-
-  const rememberPick = useCallback((pick: ElementPick): void => {
-    lastPickRef.current = pick
-  }, [])
 
   const postToProbe = useCallback((message: unknown): void => {
     const frame = iframeRef.current
@@ -154,10 +136,8 @@ export function PreviewTab(props: TabComponentProps) {
       setStatus(null)
       if (located.ok === true) {
         // Fill the chat composer draft (never send): the user decides.
-        const filled = appendToDraft(ctx, scope.sessionId, buildDraftText(located))
-        setDraftFilled(filled)
+        appendToDraft(ctx, scope.sessionId, buildDraftText(located))
       } else {
-        setDraftFilled(false)
         const cwdHint = scope.cwd !== undefined && scope.cwd !== ''
           ? `（会话工作区：${scope.cwd}）`
           : ''
@@ -165,29 +145,9 @@ export function PreviewTab(props: TabComponentProps) {
       }
     } catch (error) {
       setResult(null)
-      setDraftFilled(false)
       setStatus(error instanceof Error ? error.message : String(error))
     }
   }, [scope, t, ctx])
-
-  const sendToChat = useCallback(async (): Promise<void> => {
-    if (result === null || result.ok !== true || result.file === undefined) return
-    const pick = lastPickRef.current
-    if (pick === null) return
-    setStatus(t('resolving'))
-    try {
-      const located = await resolveLocation({
-        sessionId: scope.sessionId,
-        cwd: scope.cwd,
-        pick,
-        autoSteer: true,
-      })
-      setResult(located)
-      setStatus(located.ok === true && located.steered ? t('steered') : null)
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error))
-    }
-  }, [result, scope, t])
 
   // Probe messages from the iframe (hello, pick results, cancel).
   useEffect(() => {
@@ -200,17 +160,14 @@ export function PreviewTab(props: TabComponentProps) {
         setProbeReady(true)
       } else if (data.type === 'dsh-es:pick') {
         const pick = pickFromUnknown(data.pick)
-        if (pick !== undefined) {
-          rememberPick(pick)
-          void handlePick(pick)
-        }
+        if (pick !== undefined) void handlePick(pick)
       } else if (data.type === 'dsh-es:pick-cancel') {
         setPicking(false)
       }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [handlePick, rememberPick])
+  }, [handlePick])
 
   const togglePicking = (): void => {
     const next = !picking
@@ -218,21 +175,6 @@ export function PreviewTab(props: TabComponentProps) {
     setResult(null)
     setStatus(null)
     postToProbe({ type: 'dsh-es:set-mode', mode: next })
-  }
-
-  const openInEditor = (): void => {
-    if (result?.ok !== true || result.file === undefined) return
-    ctx.betterSidebar.openTab({ type: 'editor', path: result.file })
-  }
-
-  const copyPath = (): void => {
-    if (result?.ok !== true) return
-    const text = result.relative ?? result.file
-    if (text === undefined) return
-    void navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
-    })
   }
 
   const methodBadge = result?.ok === true ? result.method : null
@@ -344,31 +286,18 @@ export function PreviewTab(props: TabComponentProps) {
       {result !== null && result.ok === true && locationText !== undefined && (
         <div style={{
           fontSize: 12, borderRadius: 8, padding: '8px 10px',
-          border: '1px solid var(--dsw-border, #3a3f4b)', display: 'flex', flexDirection: 'column', gap: 6,
+          border: '1px solid var(--dsw-border, #3a3f4b)', display: 'flex', flexDirection: 'column', gap: 4,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <strong>{t('located')}</strong>
-            <code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{locationText}</code>
-            {methodBadge !== null && (
-              <span style={{ fontSize: 10, opacity: 0.7 }}>{t('methodLabel')}: {methodBadge}</span>
-            )}
-          </div>
+          <code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}>{locationText}</code>
+          {methodBadge !== null && (
+            <span style={{ fontSize: 10, opacity: 0.7 }}>{t('methodLabel')}: {methodBadge}</span>
+          )}
           {result.snippet !== undefined && (
             <pre style={{
               margin: 0, overflow: 'auto', maxHeight: 120, fontSize: 11,
               padding: 6, borderRadius: 6, background: 'rgba(127,127,127,0.12)',
             }}>{result.snippet}</pre>
           )}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <button type="button" onClick={openInEditor} style={buttonStyle}>{t('openInEditor')}</button>
-            <button type="button" onClick={copyPath} style={buttonStyle}>{copied ? t('copied') : t('copyPath')}</button>
-            {result.steered === false && (
-              <button type="button" onClick={() => void sendToChat()} style={buttonStyle}>{t('sendToChat')}</button>
-            )}
-            {result.steered === false && draftFilled && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('draftFilled')}</span>}
-            {result.steered === false && !draftFilled && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('notSteeredHint')}</span>}
-            {result.steered === true && <span style={{ fontSize: 11, opacity: 0.7 }}>{t('steered')}</span>}
-          </div>
         </div>
       )}
       {result !== null && result.ok === false && (
