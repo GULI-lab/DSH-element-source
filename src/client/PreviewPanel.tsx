@@ -103,7 +103,6 @@ export function PreviewPanel(props: { ctx: DraftContext; sessionId?: string; cwd
 
   const handlePick = useCallback(async (rawPick: unknown): Promise<void> => {
     const pick = pickFromUnknown(rawPick)
-    setSelecting(false)
     if (pick === undefined || sessionId === undefined) {
       setStatus(t('notLocated'))
       return
@@ -129,7 +128,7 @@ export function PreviewPanel(props: { ctx: DraftContext; sessionId?: string; cwd
     }
   }, [sessionId, cwd, t, ctx])
 
-  // Probe messages from the iframe (hello, pick, pick-cancel).
+  // Probe messages from the iframe (hello, select, pick-cancel).
   useEffect(() => {
     const onMessage = (event: MessageEvent): void => {
       const frame = iframeRef.current
@@ -138,10 +137,18 @@ export function PreviewPanel(props: { ctx: DraftContext; sessionId?: string; cwd
       const data = event.data as Record<string, unknown>
       if (data.type === 'dsh-es:hello') {
         setProbeReady(true)
-      } else if (data.type === 'dsh-es:pick' || data.type === 'dsh-es:select') {
-        void handlePick(data.pick)
+      } else if (data.type === 'dsh-es:select' || data.type === 'dsh-es:pick') {
+        // A null pick means the selection was cleared (click-again / Esc).
+        if (data.pick === null || data.pick === undefined) {
+          setResult(null)
+          setStatus(null)
+        } else {
+          void handlePick(data.pick)
+        }
       } else if (data.type === 'dsh-es:pick-cancel') {
         setSelecting(false)
+        setResult(null)
+        setStatus(null)
       }
     }
     window.addEventListener('message', onMessage)

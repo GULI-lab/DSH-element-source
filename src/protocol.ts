@@ -87,6 +87,7 @@ export type ProbeToParentMessage =
   | { type: 'dsh-es:pick'; pick: ElementPick }
   | { type: 'dsh-es:pick-cancel' }
   | { type: 'dsh-es:pick-done' }
+  | { type: 'dsh-es:select'; pick: ElementPick | null }
 
 /** postMessage payloads the parent page sends into the probe script. */
 export type ParentToProbeMessage =
