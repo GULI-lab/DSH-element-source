@@ -4,7 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] - 2026-10-30
+
+### Fixed
+
+- Compatibility with DSH 0.2.x: the `@deepseek-ai/dsh-*` peer ranges now accept `0.1.x` and `0.2.x` (`>=0.1.0-rc.6 <0.3.0`), and `engines.dsh` declares the supported host line explicitly, so the 0.2.1-rc.5 host no longer refuses the plugin as incompatible. Verified against `@deepseek-ai/dsh-llm@0.2.1-rc.5` (`/message` export and `createUserMessage` unchanged) and `@deepseek-ai/cordis@4.0.5`.
+
+## [0.1.0] - 2026-08-15
 
 ### Added
 

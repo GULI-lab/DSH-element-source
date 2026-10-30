@@ -1,6 +1,6 @@
 {
   "name": "dsh-element-source",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Click any UI element in your running dev page to jump to its Vue / React / Svelte / Angular source in the DSH chat. A click-to-source inspector for DeepSeek Harness, compatible with dsh-better-sidebar.",
   "type": "module",
   "license": "MIT",
@@ -48,7 +48,8 @@
     "./package.json": "./package.json"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "dsh": ">=0.1.0-rc.6 <0.3.0"
   },
   "packageManager": "pnpm@11.7.0",
   "dsh": {
@@ -88,10 +89,10 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-host-webserver": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-session": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-agent": ">=0.1.0-rc.6 <0.3.0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.0-rc.6 <0.3.0",
+    "@deepseek-ai/dsh-llm": ">=0.1.0-rc.6 <0.3.0",
+    "@deepseek-ai/dsh-session": ">=0.1.0-rc.6 <0.3.0",
     "dsh-better-sidebar": ">=0.11.0",
     "react": "^18.2.0"
   },
