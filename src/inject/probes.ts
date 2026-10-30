@@ -30,13 +30,13 @@ export interface ProbeElement {
 }
 
 /** A DOM attribute row (element.attributes is an iterable NamedNodeMap). */
-export interface ProbeAttribute {
+interface ProbeAttribute {
   name: string
   value: string
 }
 
 /** One probe result for a node. */
-export interface ProbeResult {
+interface ProbeResult {
   framework: PickFramework
   source?: PickSource
   name?: string
@@ -110,7 +110,10 @@ interface FiberLike {
 }
 
 function fiberTypeName(type: unknown): string | undefined {
-  if (typeof type !== 'function' && typeof type !== 'object') return undefined
+  // React text and host fibers carry a null elementType/type, and `typeof null`
+  // is 'object' — without the explicit null check reading `.displayName` throws
+  // and aborts the whole pick.
+  if (type === null || (typeof type !== 'function' && typeof type !== 'object')) return undefined
   const record = type as Record<string, unknown>
   const name = typeof record.displayName === 'string'
     ? record.displayName
@@ -241,7 +244,7 @@ export function probeAngular(el: ProbeElement): ProbeResult | null {
 }
 
 /** Run the probe chain for one node; null when nothing framework-specific matched. */
-export function probeNode(el: ProbeElement): ProbeResult | null {
+function probeNode(el: ProbeElement): ProbeResult | null {
   return probeCodeInspector(el)
     ?? probeReact(el)
     ?? probeVue(el)
@@ -276,13 +279,13 @@ export function bestProbeResult(results: Array<{ result: ProbeResult }>): ProbeR
 }
 
 /** The element's tag name, lowercased. */
-export function tagOf(el: ProbeElement): string {
+function tagOf(el: ProbeElement): string {
   if (typeof el.tagName === 'string' && el.tagName !== '') return el.tagName.toLowerCase()
   return 'div'
 }
 
 /** The element's class names (handles string className and SVGAnimatedString). */
-export function classesOf(el: ProbeElement): string[] {
+function classesOf(el: ProbeElement): string[] {
   const raw = el.className
   if (typeof raw === 'string') return classList([raw])
   if (typeof raw === 'object' && raw !== null && typeof (raw as { baseVal?: unknown }).baseVal === 'string') {
@@ -292,7 +295,7 @@ export function classesOf(el: ProbeElement): string[] {
 }
 
 /** Sample attribute rows (bounded). */
-export function attributesOf(el: ProbeElement, cap = 12, valueCap = 40): Array<[string, string]> {
+function attributesOf(el: ProbeElement, cap = 12, valueCap = 40): Array<[string, string]> {
   const attrs = el.attributes
   if (attrs === undefined) return []
   const rows: Array<[string, string]> = []
@@ -315,7 +318,7 @@ export function attributesOf(el: ProbeElement, cap = 12, valueCap = 40): Array<[
 }
 
 /** Build a short CSS selector path (element up to 5 ancestors). */
-export function selectorOf(el: ProbeElement): string {
+function selectorOf(el: ProbeElement): string {
   const parts: string[] = []
   let node: ProbeElement | null = el
   let depth = 0
@@ -344,9 +347,4 @@ export function describeElement(el: ProbeElement): ElementDescriptor {
     selector: selectorOf(el),
     attrs: attributesOf(el),
   }
-}
-
-/** The framework label for display when no probe matched. */
-export function frameworkOf(el: ProbeElement): PickFramework {
-  return probeNode(el)?.framework ?? 'generic'
 }

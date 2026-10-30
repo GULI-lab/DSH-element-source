@@ -4,11 +4,14 @@
  * Responsibilities:
  *  - Serve the page probe script at GET /dsh-element-source/inject.js (public:
  *    dev pages load it cross-origin; it is read-only code with no secrets).
- *  - Resolve one pick at POST /dsh-element-source/api/resolve (behind the
- *    same browser-trust fence as the /api gateway): normalize the reported
- *    source path, confine it to the session workspace, locate a line by text
- *    search when needed, and — when autoSteer is on — wake the session agent
- *    with a user-role message so the chat shows the source.
+ *  - Queue picks at POST /dsh-element-source/api/pick. The DSH built-in
+ *    browser hosts the dev page in an isolated frame, so the probe reaches
+ *    this route over HTTP; the route is public and write-only (a bounded
+ *    queue, no response data).
+ *  - Resolve queued picks at GET /dsh-element-source/api/pending, behind the
+ *    browser-trust fence: the DSH chat client polls with its session, the host
+ *    resolves each pick inside the session workspace, and the client fills the
+ *    composer draft. When autoSteer is on the session agent is woken too.
  *  - Contribute a system-prompt section teaching the agent how to present a
  *    located source.
  */
@@ -16,13 +19,12 @@ import { readFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createUserMessage } from '@deepseek-ai/dsh-llm/message'
 import type { Context, EsAgentsService, EsSystemPromptService } from './context-types.ts'
-import type { ElementPick, ResolveResult } from './protocol.ts'
+import type { ElementPick, PendingResult } from './protocol.ts'
 import { pickFromUnknown } from './protocol.ts'
-import { buildPreviewDocument, sanitizePreviewTarget } from './preview-proxy.ts'
-import { resolvePick, type SourceMapping } from './resolve.ts'
+import { resolvePick, type LocatedSource, type SourceMapping } from './resolve.ts'
 import { buildSteerText } from './steer.ts'
 import { isTrustedApiRequest } from './trust-fence.ts'
-import { ApiError, readJsonBody, requireString, writeError, writeJson, writeOk } from './wire.ts'
+import { ApiError, readJsonBody, writeJson } from './wire.ts'
 
 /** Plugin identity for cordis.yml rows. */
 export const name = 'dsh-element-source'
@@ -31,10 +33,10 @@ export const name = 'dsh-element-source'
 export const inject = ['webServer', 'sessions', 'loader']
 
 /** The fixed route prefix of the plugin (host and client halves agree on it). */
-export const ROUTE_PREFIX = '/dsh-element-source'
+const ROUTE_PREFIX = '/dsh-element-source'
 
 /** Plugin configuration (optional; defaults are documented in the README). */
-export interface ElementSourceConfig {
+interface ElementSourceConfig {
   /**
    * Wake the session agent with a located-source message after a pick.
    * Default false: a pick only fills the chat composer draft; nothing is
@@ -45,12 +47,6 @@ export interface ElementSourceConfig {
   mappings?: readonly SourceMapping[]
   /** Session id pinned by configuration, ignoring the request's sessionId. */
   sessionId?: string
-  /** Extra hostnames (beyond loopback) the preview proxy may fetch. */
-  proxyHosts?: readonly string[]
-  /** Max bytes of the proxied HTML document. Default 4 MiB. */
-  proxyMaxBytes?: number
-  /** Preview proxy fetch timeout in milliseconds. Default 8000. */
-  proxyTimeoutMs?: number
 }
 
 const SYSTEM_PROMPT_SECTION = [
@@ -64,6 +60,47 @@ const SYSTEM_PROMPT_SECTION = [
   '2. show the located code in a code block and explain in one sentence what the element renders;',
   '3. then stop and wait for the user\'s change request — do not make large edits on your own.',
 ].join('\n')
+
+/** CORS headers for the two public probe routes (a dev page fetches them cross-origin). */
+const CORS_HEADERS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-headers': 'content-type',
+}
+
+/** Write a JSON response with CORS headers (public routes only). */
+function writeCorsJson(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { ...CORS_HEADERS, 'content-type': 'application/json; charset=utf-8' })
+  res.end(JSON.stringify(body))
+}
+
+/** Bounded FIFO of picks waiting for the chat client's next poll. */
+class PickQueue {
+  private readonly items: Array<{ seq: number; pick: ElementPick }> = []
+
+  private seq = 0
+
+  /** Maximum queued picks; the oldest drop first (the newest picks matter). */
+  private readonly limit = 32
+
+  /** Append one pick; returns its queue sequence. */
+  push(pick: ElementPick): number {
+    this.seq += 1
+    this.items.push({ seq: this.seq, pick })
+    while (this.items.length > this.limit) this.items.shift()
+    return this.seq
+  }
+
+  /** Picks queued after `seq` (exclusive). */
+  after(seq: number): Array<{ seq: number; pick: ElementPick }> {
+    return this.items.filter(item => item.seq > seq)
+  }
+
+  /** The newest sequence handed out (the client's next `after`). */
+  sequence(): number {
+    return this.seq
+  }
+}
 
 /** The connection row's resolved trustedHosts (live read; the /api fence's own list). */
 function trustedHostsOf(ctx: Context): string[] {
@@ -85,24 +122,9 @@ function sessionCwdOf(ctx: Context, sessionId: string, clientCwd?: string): stri
   return process.cwd()
 }
 
-/** The resolve request body (validated). */
-interface ResolvePayload {
-  sessionId: string
-  cwd?: string
-  pick: ElementPick
-  autoSteer?: boolean
-}
-
-function parseResolvePayload(payload: unknown): ResolvePayload {
-  const sessionId = requireString(payload, 'sessionId')
-  const record = payload as Record<string, unknown>
-  const cwd = typeof record.cwd === 'string' && record.cwd !== '' ? record.cwd : undefined
-  const pick = pickFromUnknown(record.pick)
-  if (pick === undefined) {
-    throw new ApiError('bad-request', 'missing or invalid "pick"')
-  }
-  const autoSteer = typeof record.autoSteer === 'boolean' ? record.autoSteer : undefined
-  return { sessionId, cwd, pick, autoSteer }
+/** Clamp a poll watermark to a non-negative integer. */
+function clampAfter(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
 }
 
 /**
@@ -118,8 +140,9 @@ export function apply(ctx: Context, config?: ElementSourceConfig): void {
     ...config,
   }
   const fence = (req: IncomingMessage): boolean => isTrustedApiRequest(req, trustedHostsOf(ctx))
+  const queue = new PickQueue()
 
-  // ── Public probe script route ───────────────────────────────────────────
+  // ── Routes ───────────────────────────────────────────────────────────────
   ctx.effect(() => ctx.webServer.register({
     kind: 'prefix',
     path: ROUTE_PREFIX,
@@ -140,12 +163,12 @@ export function apply(ctx: Context, config?: ElementSourceConfig): void {
         }
         return
       }
-      if (pathname === `${ROUTE_PREFIX}/api/resolve`) {
-        await handleResolve(ctx, resolved, fence, req, res)
+      if (pathname === `${ROUTE_PREFIX}/api/pick`) {
+        await handlePick(queue, req, res)
         return
       }
-      if (pathname === `${ROUTE_PREFIX}/preview` && (req.method === 'GET' || req.method === 'HEAD')) {
-        await handlePreview(resolved, fence, req, res)
+      if (pathname === `${ROUTE_PREFIX}/api/pending`) {
+        await handlePending(ctx, resolved, queue, fence, req, res)
         return
       }
       writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown route ${pathname}` } })
@@ -163,131 +186,114 @@ export function apply(ctx: Context, config?: ElementSourceConfig): void {
   }
 }
 
-/** Handle one zero-modification preview request: fetch + inject + serve. */
-async function handlePreview(
-  config: ElementSourceConfig,
-  fence: (req: IncomingMessage) => boolean,
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<void> {
-  if (!fence(req)) {
-    writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } })
-    return
-  }
-  const urlParam = new URL(req.url ?? '/', 'http://dsh.internal').searchParams.get('url')
-  if (urlParam === null || urlParam === '') {
-    writeJson(res, 400, { ok: false, error: { code: 'bad-request', message: 'missing "url" query parameter' } })
-    return
-  }
-  const target = sanitizePreviewTarget(urlParam, config.proxyHosts)
-  if (target.kind === 'invalid') {
-    writeJson(res, 400, { ok: false, error: { code: 'bad-request', message: 'invalid preview URL' } })
-    return
-  }
-  if (target.kind === 'blocked') {
-    writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: `preview target refused (${target.reason}): only local http(s) hosts` } })
-    return
-  }
-  try {
-    const maxBytes = config.proxyMaxBytes ?? 4 * 1024 * 1024
-    const timeoutMs = config.proxyTimeoutMs ?? 8000
-    const response = await fetch(target.url, {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-    if (!response.ok) {
-      writeJson(res, 502, { ok: false, error: { code: 'resolve-error', message: `target answered HTTP ${response.status}` } })
-      return
-    }
-    const contentType = response.headers.get('content-type') ?? ''
-    if (!contentType.includes('text/html')) {
-      writeJson(res, 415, { ok: false, error: { code: 'bad-request', message: 'preview target is not an HTML page' } })
-      return
-    }
-    const html = await response.text()
-    if (html.length > maxBytes) {
-      writeJson(res, 413, { ok: false, error: { code: 'bad-request', message: 'preview target exceeds the size limit' } })
-      return
-    }
-    const finalUrl = response.url !== '' ? new URL(response.url) : target.url
-    const injectScriptUrl = `http://${req.headers.host}${ROUTE_PREFIX}/inject.js`
-    const document = buildPreviewDocument(html, finalUrl, injectScriptUrl, target.url.href)
-    res.writeHead(200, {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'no-store',
-    })
-    res.end(req.method === 'HEAD' ? undefined : document)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    writeJson(res, 502, { ok: false, error: { code: 'resolve-error', message: `cannot fetch preview target: ${message}` } })
-  }
-}
-
-/** Handle one resolve request: fence, resolve, optionally steer, respond. */
-async function handleResolve(
-  ctx: Context,
-  config: Required<Pick<ElementSourceConfig, 'autoSteer'>> & ElementSourceConfig,
-  fence: (req: IncomingMessage) => boolean,
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<void> {
-  if (!fence(req)) {
-    writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } })
+/** Accept one pick from any page and queue it (write-only; never returns pick data). */
+async function handlePick(queue: PickQueue, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS_HEADERS)
+    res.end()
     return
   }
   if (req.method !== 'POST') {
-    writeJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } })
+    writeCorsJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } })
     return
   }
   try {
-    const payload = await readJsonBody(req)
-    const body = parseResolvePayload(payload)
-    const sessionId = config.sessionId ?? body.sessionId
-    const cwd = sessionCwdOf(ctx, sessionId, body.cwd)
-    const located = await resolvePick(body.pick, {
+    const body = await readJsonBody(req)
+    const pick = pickFromUnknown(body)
+    if (pick === undefined) {
+      writeCorsJson(res, 400, { ok: false, error: { code: 'bad-request', message: 'invalid pick payload' } })
+      return
+    }
+    queue.push(pick)
+    res.writeHead(204, CORS_HEADERS)
+    res.end()
+  } catch (error) {
+    const status = error instanceof ApiError ? error.status : 400
+    writeCorsJson(res, status, {
+      ok: false,
+      error: { code: 'bad-request', message: error instanceof Error ? error.message : 'bad request' },
+    })
+  }
+}
+
+/** Drain and resolve the picks queued after the caller's watermark. */
+async function handlePending(
+  ctx: Context,
+  config: Required<Pick<ElementSourceConfig, 'autoSteer'>> & ElementSourceConfig,
+  queue: PickQueue,
+  fence: (req: IncomingMessage) => boolean,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS_HEADERS)
+    res.end()
+    return
+  }
+  if (req.method !== 'GET') {
+    writeCorsJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } })
+    return
+  }
+  if (!fence(req)) {
+    writeCorsJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } })
+    return
+  }
+  const url = new URL(req.url ?? '/', 'http://dsh.internal')
+  const requestedId = config.sessionId ?? (url.searchParams.get('sessionId') ?? '')
+  // Resolution runs only for a real session: an unknown id must never let a
+  // caller resolve against an arbitrary directory it names itself. Session ids
+  // are stored as `session-<uuid>`; the bare uuid is accepted too.
+  const found = sessionById(ctx, requestedId)
+  if (found === undefined) {
+    writeCorsJson(res, 404, { ok: false, error: { code: 'not-found', message: 'unknown session' } })
+    return
+  }
+  const sessionId = found.id
+  const cwd = sessionCwdOf(ctx, sessionId, url.searchParams.get('cwd') ?? undefined)
+  const after = clampAfter(Number(url.searchParams.get('after') ?? '0'))
+  const results: PendingResult[] = []
+  for (const entry of queue.after(after)) {
+    const located = await resolvePick(entry.pick, {
       cwd,
       mappings: config.mappings,
-      frameworkHint: body.pick.framework,
+      frameworkHint: entry.pick.framework,
     })
-
-    let result: ResolveResult
     if ('error' in located) {
-      result = {
-        ok: false,
-        method: 'none',
-        framework: body.pick.framework,
-        existed: false,
-        steered: false,
-        error: located.error,
-      }
-    } else {
-      const steered = await maybeSteer(ctx, config.autoSteer, body, sessionId, located)
-      result = {
-        ok: true,
-        file: located.file,
-        relative: located.relative,
-        line: located.line,
-        column: located.column,
-        snippet: located.snippet,
-        method: located.method,
-        framework: body.pick.framework,
-        existed: located.existed,
-        steered,
-      }
+      results.push({ seq: entry.seq, ok: false, error: located.error, framework: entry.pick.framework })
+      continue
     }
-    writeOk(res, result)
-  } catch (error) {
-    writeError(res, error)
+    results.push({
+      seq: entry.seq,
+      ok: true,
+      relative: located.relative,
+      line: located.line,
+      column: located.column,
+      snippet: located.snippet,
+      method: located.method,
+      framework: entry.pick.framework,
+    })
+    await maybeSteer(ctx, config.autoSteer, entry.pick, sessionId, located)
   }
+  writeCorsJson(res, 200, { ok: true, value: { sequence: queue.sequence(), results } })
+}
+
+/** Resolve a session by id, tolerating the bare-uuid form (`session-<uuid>` is canonical). */
+function sessionById(ctx: Context, raw: string): { id: string; session: { header: { cwd?: string } } } | undefined {
+  if (raw === '') return undefined
+  const direct = ctx.sessions.get(raw)
+  if (direct !== undefined) return { id: raw, session: direct }
+  const alternate = raw.startsWith('session-') ? raw.slice('session-'.length) : `session-${raw}`
+  const alt = ctx.sessions.get(alternate)
+  return alt === undefined ? undefined : { id: alternate, session: alt }
 }
 
 /** Deliver the steering message when enabled and the session's agent is live. */
 async function maybeSteer(
   ctx: Context,
   autoSteer: boolean,
-  body: ResolvePayload,
+  pick: ElementPick,
   sessionId: string,
-  located: { relative: string; line?: number; method: ResolveResult['method'] },
+  located: LocatedSource,
 ): Promise<boolean> {
   if (!autoSteer) return false
   const agents = ctx.get('agents') as EsAgentsService | undefined
@@ -295,13 +301,9 @@ async function maybeSteer(
   const agent = agents.get(sessionId)
   if (agent === undefined) return false
   const message = createUserMessage({
-    content: [{ type: 'text', text: buildSteerText(located, body.pick.element, body.pick.pageUrl) }],
+    content: [{ type: 'text', text: buildSteerText(located, pick.element, pick.pageUrl) }],
     source: { kind: 'plugin', plugin: 'dsh-element-source' },
   })
   agent.steer(message)
   return true
 }
-
-/** Re-exported for downstream type consumers. */
-export type { Context } from './context-types.ts'
-export type { ElementPick, ResolveResult } from './protocol.ts'

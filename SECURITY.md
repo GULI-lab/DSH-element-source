@@ -12,9 +12,11 @@ Please include:
 
 ## Scope
 
-- `POST /dsh-element-source/api/resolve` and `GET /dsh-element-source/preview` run behind the browser-trust fence and are confined to the session workspace / loopback targets by design — treat any bypass as a bug;
+- `GET /dsh-element-source/api/pending` runs behind the browser-trust fence, requires a real session, and resolves files only inside that session's workspace — treat any bypass as a bug;
+- `POST /dsh-element-source/api/pick` is intentionally public and CORS-open because the page runs in an isolated built-in-browser webview. It is write-only, bounded (32 queued picks), and never returns pick data;
 - The page probe (`inject.js`) is read-only metadata collection; it must never read DSH data;
-- The preview proxy serves proxied pages from the DSH origin — only ever point it at trusted local dev servers.
+- Source-path mappings may rebase a path but must not escape the session workspace;
+- The plugin ships no preview proxy and never fetches arbitrary page URLs.
 
 ## Supported versions
 

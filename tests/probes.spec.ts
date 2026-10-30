@@ -98,6 +98,15 @@ describe('probeReact', () => {
     expect(result).toEqual({ framework: 'react', name: 'ChatPanel' })
     expect(result?.source).toBeUndefined()
   })
+
+  it('tolerates text and host fibers whose elementType/type are null', () => {
+    // React text/host fibers carry null elementType/type; `typeof null` is
+    // 'object', so a missing null guard used to throw inside every pick.
+    const textFiber: Record<string, unknown> = { type: null, elementType: null, memoizedProps: { children: 'x' }, return: null }
+    const el = node({ ['__reactFiber$null']: textFiber })
+    expect(() => probeReact(el)).not.toThrow()
+    expect(probeReact(el)).toBeNull()
+  })
 })
 
 describe('probeVue', () => {

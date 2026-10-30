@@ -1,109 +1,214 @@
 # dsh-element-source
 
-> Click any UI element in your running dev page to jump to its Vue / React / Svelte / Angular source. A click-to-source inspector for [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) (DSH), compatible with [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar): preview local dev servers, pick an element, and the source location lands in the DSH chat for the agent to tweak.
+**Click-to-source for the DeepSeek Harness built-in browser.**
+
+Open your frontend dev page in DSH's built-in browser, turn on the picker from the
+browser's own toolbar, then click the **「添加到对话」** pill on the element you want.
+The element's source file — with its line — lands in the current session's chat
+composer as a **file reference chip**, and clicking that chip opens the built-in
+preview scrolled to the exact line. Nothing is sent until you send it.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/dsh--plugin--better--sidebar-blue" alt="dsh plugin, dsh-better-sidebar compatible" />
+  <img src="https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/assets/dsh-element-source.png" alt="Pick an element in the DSH built-in browser and get its source as a file reference chip in the chat" width="900" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/DSH-built--in%20browser-blue" alt="DSH built-in browser" />
+  <img src="https://img.shields.io/badge/platform-desktop%20app-lightgrey" alt="Desktop app" />
   <img src="https://img.shields.io/npm/v/dsh-element-source" alt="npm version" />
   <img src="https://img.shields.io/github/license/GULI-lab/DSH-element-source" alt="license" />
 </p>
 
 English | [中文](README.zh.md)
 
-## What it does
+## 0.2.0 — rebuilt around the built-in browser
 
-Finding "that button on the page" ↔ "the line of code that renders it" becomes a single click:
+This release is a deliberate reset of the plugin's product surface: **it is built
+for the DeepSeek Harness built-in browser and nothing else.**
 
-1. Open your frontend page (dev server) in the **Local preview** entry — a tab this plugin registers in dsh-better-sidebar, or its own right-docked sidebar when the sidebar is not installed;
-2. Enable **Pick mode**, hover to highlight the target, **click** it;
-3. The plugin resolves the matching **source file + line** and fills the chat composer with an `[元素定位]` message (nothing is sent — you decide);
-4. The agent reads the file with the `read` tool, shows the code in the dialog, and waits for your change request.
+- **Built-in browser only.** The old "Local preview" tab, the right-docked
+  sidebar, the iframe preview and the preview proxy are gone. Use the browser
+  that ships with the DSH desktop app.
+- **dsh-better-sidebar is no longer supported.** Its integration, the "Local
+  preview" tab and the fallback sidebar were removed. Installing both is not a
+  supported configuration; if you installed dsh-better-sidebar only for this
+  plugin, you can remove it.
+- **One icon in the browser's own toolbar.** On a development page the plugin
+  appends a select-element icon as the **last item of the browser toolbar** (to
+  the right of the open-external button). The address bar shrinks to make room;
+  there is no plugin address bar, tab strip or sidebar. The button is removed
+  again as soon as the page stops being a development page.
+- **Picker enabled by default, page protected.** While picking, ordinary page
+  clicks and the context menu are neutralized (no navigation, no theme toggle,
+  no form submit) and only the pill performs a pick — so a click intended as a
+  selection can never operate the page.
+- **A pick becomes a file reference chip.** The composer receives the located
+  file (and line) as a chip; click it to open the built-in preview scrolled to
+  that line. The plugin never sends a message for you.
+- **Install into the desktop profile.** The built-in browser lives in the DSH
+  desktop app, so the one-command installer defaults to profile `desktop`.
 
-No browser extension required, and it works for Vue / React / Svelte / Angular plus any other framework (generic fallback).
+**Why remove the old preview?** The built-in browser already provides the
+address bar, tabs, history, cookies and the Electron session. A second
+iframe/proxy duplicated that surface and competed with dsh-better-sidebar for the
+same slot. The plugin now does two things only: add the picker to the browser
+toolbar, and hand the located file to the current chat composer.
 
-## Framework support
+## Requirements
 
-| Framework | File | Line | How |
-| --- | --- | --- | --- |
-| React (dev build) | ✅ exact | ✅ exact | Reads the JSX `__source` on the fiber (`@vitejs/plugin-react` / CRA inject it) |
-| Vue 2 / Vue 3 (dev build) | ✅ exact | ~exact | `__file` gives the file; the line comes from template-text matching |
-| Svelte (dev build) | ✅ exact | ✅ exact | Reads dev-mode `__svelte_meta` |
-| Angular | best effort | best effort | Detects `ng-reflect-*` markers, then component/text search |
-| Any framework + code-inspector-plugin installed | ✅ exact | ✅ exact | Reads its injected `data-insp-*` DOM attributes directly |
-| Other / unknown | ✅ | ~ | Full-text search of the session workspace for the clicked text / class / id |
+| Requirement | Details |
+| --- | --- |
+| DSH | **DSH desktop app 0.2.x** with the built-in browser. The web-only `dsh web` page has no Electron `<webview>`, so no picker appears there. |
+| Frontend | A running dev server (Vite, webpack, etc.) and a **development build** of your page. |
+| Workspace | The current session's working directory must be your frontend project root. The resolver refuses files outside it. |
+| Framework | React, Vue 2/3, Svelte, Angular, code-inspector, or the generic text-search fallback. |
 
-## How it works
-
-```
-Proxy mode: GET /dsh-element-source/preview?url=…
-  the plugin host fetches the dev page → injects <base href=dev-url> + probe
-  + the real-URL marker → serves it from the GUI origin (real origin, so
-  localStorage / auth work, and the probe is ready automatically)
-
-in-page probe (inject.js: IIFE, zero deps)
-  └─ hover highlight → click → probe chain (data-insp → React __source → Vue __file → Svelte → Angular → generic)
-     → postMessage (cross-origin safe) → DSH page
-"Local preview" entry (registered by this plugin; can open localhost)
-  ├─ dsh-better-sidebar installed → its "Local preview" tab (preferred entry)
-  └─ otherwise → a right-docked sidebar (full-height, collapsible to an edge
-     strip) bound to the current session
-  └─ receives postMessage → POST /dsh-element-source/api/resolve
-DSH Host
-  ├─ GET  /dsh-element-source/inject.js   (serves the probe script publicly)
-  ├─ GET  /dsh-element-source/preview     (fetch + inject; loopback hosts only)
-  ├─ POST /dsh-element-source/api/resolve (behind the browser-trust fence)
-  │     ├─ path normalization (webpack /src, Vite absolute, Windows drives, configurable mappings)
-  │     ├─ confinement: the located file MUST stay inside the session cwd
-  │     └─ text / component search fallback for the line
-  └─ the located source fills the chat composer draft (never sent); you send it
-```
-
-### dsh-better-sidebar compatibility
-
-This plugin does **not** depend on dsh-better-sidebar, but is fully compatible with it: with the sidebar installed the entry is its **Local preview** tab (the standalone right sidebar is suppressed, so the two UIs never overlap); without it, a full-height right sidebar (collapsible to an edge strip) hosts the panel, themed with the DSH tokens so it follows the GUI theme. Routes (`/sidebar/*` vs `/dsh-element-source/*`), postMessage namespaces and UI slots are completely disjoint, so the two plugins coexist without conflict.
-
-### A dedicated Local preview tab
-
-Frontend dev servers usually run on `localhost`, so this plugin ships a minimal **Local preview** tab — just an iframe + address bar that can open local (loopback) addresses directly (it is not a browser: no tabs / history). The page is proxied through the DSH origin with the probe auto-injected, so the probe is ready automatically. For **non-loopback** pages (e.g. a dev server bound to a LAN IP), the sidebar's built-in browser or a regular browser tab works too — the probe reports over postMessage regardless of the sandbox.
+Production builds carry no runtime source metadata, so the picker only appears
+on development pages.
 
 ## Install
 
-**Prereqs**: DSH (`dsh web` runs). **Optional**: [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) — with it the entry is the sidebar's "Local preview" tab; without it, a full-height right sidebar hosts the panel.
+One command, into the **desktop** profile:
 
-**macOS / Linux** (or Windows with Git Bash / WSL):
+macOS / Linux:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.sh | DSH_PROFILE=desktop bash
 ```
 
-**Windows (PowerShell 5.1+ / pwsh)**:
+Windows PowerShell 5.1+ / pwsh:
 
 ```powershell
+$env:DSH_PROFILE = "desktop"
 irm https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.ps1 | iex
 ```
 
 Manual install:
 
 ```sh
-cd ~/.dsh/profiles/web
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add dsh-element-source
+cd ~/.dsh/profiles/desktop
+npx -y --package @deepseek-ai/dsh dsh plugin --profile desktop add dsh-element-source
 ```
 
-Then **hard-refresh** the browser (Ctrl/Cmd+Shift+R).
+If your desktop app uses a differently named profile, substitute that profile for
+`desktop`. After installing, restart DSH or reload the desktop app window so the
+client half is loaded.
 
-## Loading the probe in your own page (optional)
+Local checkout:
 
-The **Local preview** tab's proxy mode injects the probe automatically. Loading the probe in your own page is only needed when you inspect with a browser other than this tab (e.g. the built-in sidebar browser for non-loopback URLs) — pick one:
+```sh
+git clone https://github.com/GULI-lab/DSH-element-source
+cd ~/.dsh/profiles/desktop
+npx -y --package @deepseek-ai/dsh dsh plugin --profile desktop add link:/path/to/DSH-element-source
+```
 
-**Option A — one script line.** Add to your `index.html` `<body>`:
+## Use
+
+1. Start your frontend dev server, for example `http://localhost:3000`.
+2. Open the **DSH built-in browser** and navigate to that URL.
+3. On a development page, a **select-element icon** appears as the **last item of
+   the browser toolbar** (right of ↗). It is highlighted while the picker is on;
+   the picker starts **enabled**.
+4. Hover the target element. A dashed outline follows the pointer and an
+   **「添加到对话」** pill appears at the element's lower-right corner, outside the
+   element so it never covers its content.
+5. **Click the pill**, not the page. While picking, page clicks are swallowed and
+   only the pill performs a pick. The located file is inserted into the current
+   session's composer as a file reference chip such as `LoginPage.tsx:90`.
+6. Add your change request in the composer and send it. The agent reads the file,
+   shows the located code, and waits for your instruction.
+7. Click the inserted chip to open the built-in file preview **scrolled to the
+   located line**.
+
+Press `Esc` or click the toolbar icon to turn the picker off; page clicks work
+normally again. The icon color and tooltip reflect the current state.
+
+> The picker is deliberately active while you inspect the page: ordinary clicks
+> and the context menu are swallowed, and the pill is the only pick target. If
+> you need to interact with the page, press `Esc` or toggle the toolbar icon
+> first.
+
+### What the composer receives
+
+- Primary path: a **file reference chip** such as `LoginPage.tsx:90`, using the
+  same `@path` mention semantics as the built-in `@` file menu. The chip is
+  clickable and jumps to the line in the built-in preview.
+- Fallback: if the composer reference API is unavailable, plain
+  `[元素定位] src/App.vue:12` text is appended to the draft.
+- Nothing is sent automatically. Set `autoSteer: true` only if you want the
+  session agent to be woken with a bilingual located-source message immediately
+  after a pick.
+
+## Configuration
+
+Override the plugin row in your profile's `cordis.patch.yml`:
+
+```yaml
+- id: element-source
+  config:
+    autoSteer: false        # wake the agent after a pick (default false: only fill the composer draft)
+    mappings:               # source-path prefix mappings (monorepo / node_modules rebasing)
+      - find: '@app/ui/src'
+        replacement: 'D:/workspace/my-app/packages/ui/src'
+    sessionId: 'fixed-session'  # pin a session (usually unnecessary)
+```
+
+- `autoSteer` — `false` by default. When `true`, a successful pick also calls the
+  session agent with a located-source message; it does not send a composer
+  message for you.
+- `mappings` — prefix rewrites applied before path normalization. The final path
+  must still be inside the session workspace.
+- `sessionId` — pins resolution to one session. By default the current session is
+  used.
+
+`proxyHosts` is gone. There is no preview proxy anymore.
+
+## How it works
+
+```text
+DSH desktop app
+└─ built-in browser <webview>
+   ├─ dev page: probe injected on dom-ready / did-navigate / did-navigate-in-page
+   │    hover → 「添加到对话」 pill → pick stored in window.__dshEsPicks
+   ├─ toolbar: select-element icon appended as the last item (dev pages only;
+   │           removed again on a non-development page)
+   └─ client overlay polls the webview every 300 ms
+        picks → POST /dsh-element-source/api/pick   (public, write-only queue)
+        host  → GET  /dsh-element-source/api/pending (trust fence + real session)
+                  resolve within session cwd → file[:line[:column]]
+        client → file reference chip in the current session composer
+                 chip click → built-in file preview scrolled to the line
+```
+
+No page proxy and no second UI stack. The probe is injected directly into the
+Electron `<webview>`, so the page keeps its real origin and its own network
+behavior. Resolution is bounded (2.5 s search budget, 60 s result cache) so a
+pick in a large monorepo does not stall the composer.
+
+## Framework support
+
+| Framework | File | Line | How |
+| --- | --- | --- | --- |
+| React (dev build) | exact | exact | Reads JSX `__source` on the fiber (@vitejs/plugin-react / CRA inject it) |
+| Vue 2 / Vue 3 (dev build) | exact | approximate | `__file` gives the file; the line comes from template-text matching |
+| Svelte (dev build) | exact | exact | Reads dev-mode `__svelte_meta` |
+| Angular | best effort | best effort | `ng-reflect-*` markers, then component/text search |
+| Any framework + code-inspector-plugin | exact | exact | Reads injected `data-insp-*` DOM attributes |
+| Other / unknown | yes | approximate | Full-text search of the session workspace for text / class / id |
+
+## Optional: inspect pages outside the built-in browser
+
+The built-in browser is the supported path and the only one that gets the
+toolbar icon. If you must inspect a page in a regular browser, load the probe
+yourself; picks still reach the DSH desktop app through the same host queue.
+
+Option A — script tag:
 
 ```html
 <script src="http://127.0.0.1:3080/dsh-element-source/inject.js"></script>
 ```
 
-(`3080` = your DSH Web UI port; a LAN IP works too for remote devices.)
-
-**Option B — Vite plugin** (works for Vue / React / Svelte / Angular Vite projects):
+Option B — Vite plugin:
 
 ```ts
 // vite.config.ts
@@ -115,83 +220,96 @@ export default defineConfig({
 })
 ```
 
-The plugin only injects in dev (`apply: 'serve'`); production builds are untouched. If DSH is not on the default address:
+The Vite plugin only injects in dev (`apply: 'serve'`); production builds are
+untouched. If your DSH server is not on the default address:
 
 ```ts
 dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 ```
 
-## Usage
-
-1. **Open the entry**: with better-sidebar → its **Local preview** tab; without it → the right-docked sidebar (open by default; collapsible to an edge strip) (**note: this previews YOUR page, not the DSH UI itself**);
-2. Enter `http://localhost:3000` (your dev server) and press Enter;
-3. Watch the **probe status icon** (wifi) turn green — ready automatically in proxy mode;
-4. Click the **select** icon (crosshair), move the mouse — the target highlights; **click** to locate the source;
-5. The panel shows the location: `file:line` and the source snippet;
-6. **The pick fills the chat input DRAFT automatically** (e.g. `[元素定位] src/components/App.vue:12`) — nothing is sent; add your own wording and press Enter.
-
-> `Esc` cancels selection. A pick only fills the composer draft; whether to send is entirely your call.
-
-The toolbar also has **refresh** (reload the page) and **open externally** (real browser tab).
-
-## Configuration
-
-Override the row in your `cordis.patch.yml` (or the profile patch):
-
-```yaml
-- id: element-source
-  config:
-    autoSteer: false        # wake the agent right after a pick (default false: only fill the chat draft)
-    mappings:               # source-path prefix mappings (monorepo / node_modules rebasing)
-      - find: '@app/ui/src'
-        replacement: 'D:/workspace/my-app/packages/ui/src'
-    proxyHosts:             # extra hosts the preview proxy may fetch (default: loopback only)
-      - '192.168.1.10'
-    sessionId: 'fixed-session'  # pin a session (usually not needed)
-```
+In this mode there is no toolbar icon; the probe starts active on a development
+page and shows the 添加到对话 pill. The DSH desktop app must be running so the
+pick is drained into the current session.
 
 ## Security
 
-- `/dsh-element-source/api/resolve` and `/dsh-element-source/preview` sit behind the same browser-trust fence as the `/api` gateway (Host header + `trustedHosts`);
-- The resolved path **must** fall inside the session workspace (cwd), otherwise it is refused;
-- The preview accepts loopback hosts only (default) and serves the page from the GUI origin — it is for trusted local dev servers; the page's relative API requests hit the DSH origin (the documented trade-off — for same-origin data calls, load the probe in your own page);
-- inject.js is read-only: it only collects click metadata and never touches DSH data; the `inject.js` route is public so dev pages can load it cross-origin;
-- `trust-fence.ts` is a behavioral copy of DSH's BSD-3-Clause implementation (attribution in the file header).
+- `POST /dsh-element-source/api/pick` is public and CORS-open because the page
+  runs in an isolated webview. It is write-only: a bounded FIFO queue (32 picks),
+  no pick data is returned.
+- `GET /dsh-element-source/api/pending` sits behind the same browser-trust fence
+  as the DSH `/api` gateway and requires a real session.
+- Resolution uses the session's authoritative `cwd`; a resolved file outside the
+  workspace is refused. `mappings` can rebase a path but cannot escape the
+  workspace.
+- `inject.js` is public read-only probe code. It collects element metadata and
+  optional framework source metadata; it does not touch DSH data.
+- There is no preview proxy and no arbitrary URL fetching anymore, so the old
+  proxy-origin trade-off is gone.
 
-## Relation to code-inspector-plugin
+## Migration from 0.1.x
 
-[code-inspector](https://github.com/zh-lx/code-inspector) is a **compile-time** approach: a bundler plugin rewrites JSX / SFC compilation to inject `data-insp-*` attributes, and opens your IDE via `launch-ide` on click. This plugin is a **runtime** approach: it reads metadata the dev runtime already has and delivers the location to the **DSH chat** instead of an external IDE. They complement each other — if code-inspector-plugin is installed, this plugin reads its injected `data-insp-*` attributes for exact positions across all frameworks at zero extra cost.
+| Old | New |
+| --- | --- |
+| Standalone "Local preview" tab / right sidebar | DSH built-in browser only |
+| dsh-better-sidebar integration | Removed; not supported |
+| `GET /dsh-element-source/preview` proxy | Removed (404) |
+| `proxyHosts` config | Removed |
+| Install into `web` profile | Install into `desktop` profile |
+| Pick inserted plain text into the composer | File reference chip (+ plain-text fallback) |
 
-## Contributing
+Keep `autoSteer`, `mappings` and `sessionId`; they still work. A 0.1.x
+installation may also leave dsh-better-sidebar behind — remove it separately if
+you no longer need it.
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to set up the dev environment and submit changes. Found a bug or have an idea? Open an [issue](https://github.com/GULI-lab/DSH-element-source/issues).
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| No select icon in the browser toolbar | Use the DSH desktop app's built-in browser, not a plain `dsh web` page. The page must be a development build. Confirm the plugin is installed in the `desktop` profile, then restart the app. |
+| Icon visible, but no 「添加到对话」 pill | The probe may not have activated: the page may be a production build, or it loaded before the plugin. Reload the page and hover again. |
+| Pick succeeds, but the composer gets nothing | The current session needs a working directory. Switch the session workspace to the project root and ensure the DSH app is running. |
+| Location is refused as outside the workspace | The resolved file is outside the session cwd. Change the session's working directory to the project root. |
+| The chip opens the preview at the top instead of the line | The line is remembered per inserted chip for the current app run; a chip restored after an app restart may fall back to a top-of-file open. Re-pick to restore the line jump. |
+| dsh-better-sidebar still shows an old "Local preview" tab | That is the old 0.1.x integration. Install the new version, restart, and remove dsh-better-sidebar if it was only used for this plugin. |
+| `autoSteer` does not wake the agent | The session must have a live agent; picking alone never sends a message. |
+
+## Known limitations
+
+- **Desktop app only.** The web-only `dsh web` UI has no Electron `<webview>`
+  pages, so the toolbar icon and probe never appear there.
+- **Development pages only.** Production builds have no runtime source metadata;
+  the icon is hidden and removed on such pages.
+- **Toolbar DOM is internal.** The select icon is appended to the built-in
+  browser's toolbar. A future DSH UI refactor may require a plugin update.
+- **Workspace confinement.** If the session workspace is not the project root,
+  picks resolve to the wrong tree or are refused. Switch the session workspace
+  first.
+- **Vue lines are heuristic.** Icon-only or textless elements may degrade to
+  file-level or component-definition locations.
+- **Angular / Svelte need dev builds.** Production builds carry no usable source
+  metadata.
+- **Auto-steer needs a live agent.** `autoSteer` only wakes an existing session
+  agent; it never sends a composer draft for you.
+- **dsh-better-sidebar is unsupported.** The old sidebar entry is gone; there is
+  no fallback sidebar.
 
 ## Development
 
 ```sh
 pnpm install
 pnpm typecheck     # tsc --noEmit
-pnpm test          # vitest (resolve / probes / steer / protocol / preview-proxy / draft)
-pnpm build         # tsc types + tsdown artifacts (lib/index.js, lib/client.js, lib/inject.js, lib/vite-plugin.js)
+pnpm test          # vitest: draft / probes / protocol / resolve / steer
+pnpm build         # tsc types + tsdown artifacts
 ```
 
-Artifacts: `lib/index.js` (host), `lib/client.js` (browser half, `window.__ModuleLoader__.load` module-table format), `lib/inject.js` (page probe, classic `<script>`, zero deps), `lib/vite-plugin.js` (Vite injection plugin).
+Artifacts: `lib/index.js` (host), `lib/client.js` (browser half), `lib/inject.js`
+(page probe), `lib/vite-plugin.js` (optional Vite injection).
 
-To try a local checkout in DSH before the npm release:
+## Contributing
 
-```sh
-git clone https://github.com/GULI-lab/DSH-element-source
-cd ~/.dsh/profiles/web
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add link:/path/to/DSH-element-source
-```
-
-## Known limitations
-
-- The Local preview tab targets **your own dev page**: embedding the DSH UI itself (e.g. `http://127.0.0.1:3080`) in the preview iframe does not render — the GUI cannot boot as a proxied page. That is not a plugin bug;
-- The preview serves the page from the DSH origin: relative-path API calls hit DSH instead of the dev server (for same-origin data calls, load the probe in your own page); pages with a strict CSP (`script-src 'self'`) may block the injected probe;
-- Vue line numbers rely on template-text matching: icon-only / textless elements degrade to file-level (or component-definition) results;
-- Angular / Svelte need dev builds — production builds carry no runtime source info;
-- Inspecting with a browser other than the Local preview tab (non-loopback URLs) requires the page to load the probe itself (one line or the Vite plugin); this is forced by the same-origin policy — an iframe's DOM is unreadable from the parent, no iframe approach avoids it.
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+development setup and submission flow. Found a bug or have an idea? Open an
+[issue](https://github.com/GULI-lab/DSH-element-source/issues).
 
 ## License
 

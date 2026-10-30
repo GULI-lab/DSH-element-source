@@ -1,107 +1,184 @@
 # dsh-element-source
 
-> 在你的开发页面里点击任意 UI 元素，跳转到它的 Vue / React / Svelte / Angular 源代码。[DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（DSH）的点击定位源码检查器，兼容 [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)：预览本地 dev server，点击元素，源码位置进入 DSH 聊天，交给助手微调。
+**给 DeepSeek Harness 内置浏览器用的点击定位源码插件。**
+
+在 DSH 桌面端的「内置浏览器」里打开你的前端 dev 页面，从浏览器自己的工具栏开启拾取，
+再点击目标元素右下角的 **「添加到对话」** 气泡。元素对应的源码文件（连同行号）会以
+**文件引用 chip** 的形式进入当前会话输入框；点击这个 chip 会在内置预览里**直接滚动到对应行**。
+默认不会发送任何消息。
 
 <p align="center">
-  <img src="https://img.shields.io/badge/dsh--plugin--better--sidebar-blue" alt="dsh 插件，兼容 dsh-better-sidebar" />
+  <img src="https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/assets/dsh-element-source.png" alt="在 DSH 内置浏览器里拾取元素，源码以文件引用 chip 进入聊天" width="900" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/DSH-built--in%20browser-blue" alt="DSH 内置浏览器" />
+  <img src="https://img.shields.io/badge/platform-desktop%20app-lightgrey" alt="桌面端" />
   <img src="https://img.shields.io/npm/v/dsh-element-source" alt="npm 版本" />
   <img src="https://img.shields.io/github/license/GULI-lab/DSH-element-source" alt="开源协议" />
 </p>
 
 [English](README.md) | 中文
 
-## 这是什么
+## 0.2.0 —— 围绕内置浏览器重建
 
-开发者经常要在「页面上的某个按钮 / 某段文案」和「源代码里对应的那一行」之间来回找。这个插件把这一过程变成一次点击：
+这是一次有意为之的产品面重置：**插件只围绕 DeepSeek Harness 内置浏览器工作，不做别的。**
 
-1. 在「本地预览」入口里打开你的前端页面（dev server）——装有 dsh-better-sidebar 时它是侧边栏里的一个 Tab，没装时是本插件自带的右侧侧边栏；
-2. 打开「拾取模式」，鼠标悬停高亮目标，**点击一下**；
-3. 插件自动解析出对应的**源文件 + 行号**，并把一条 `[元素定位]` 消息填入聊天输入框（不会自动发送，由你决定）；
-4. 助手用 `read` 工具读取该文件，在对话框里展示定位到的代码，等你提出修改需求。
+- **只支持内置浏览器。** 旧的「本地预览」Tab、右侧停靠侧边栏、iframe 预览和预览代理全部删除；
+  请使用 DSH 桌面端自带的内置浏览器。
+- **不再兼容 dsh-better-sidebar。** 与它的集成、侧边栏「本地预览」Tab 和兜底侧边栏都已移除；
+  两者同时安装不再是受支持配置。如果你只是为了本插件才装 dsh-better-sidebar，可以卸载它。
+- **浏览器工具栏里只多一个图标。** 在开发页面上，插件把「选择元素」图标追加为
+  **浏览器工具栏的最后一项**（在「外部打开 ↗」右侧），地址栏自动让位；没有插件的地址栏、
+  标签页或侧边栏。页面一旦不是开发页面，图标会被移除。
+- **拾取默认开启，页面受保护。** 拾取模式下普通页面点击和右键菜单都会被拦截
+  （不导航、不切主题、不提交表单），只有「添加到对话」气泡执行定位——
+  你本想选中元素的那一次点击，绝不会变成对页面的操作。
+- **定位结果变成文件引用 chip。** 当前会话输入框会收到「文件 + 行号」的 chip；
+  点击 chip 能在内置预览里直接滚到那一行。插件永远不会替你发送消息。
+- **安装到 desktop profile。** 内置浏览器在桌面端里，所以一键安装脚本默认使用 `desktop` profile。
 
-不需要安装浏览器扩展，支持 Vue / React / Svelte / Angular 及任意其他框架（通用兜底）。
+**为什么移除旧预览？** 内置浏览器已经提供地址栏、标签页、历史、Cookie 和 Electron 会话；
+再造一套 iframe/代理只是重复，还会和 dsh-better-sidebar 抢同一个入口。
+插件现在只做两件事：把选择器加到浏览器工具栏，把定位结果交给当前聊天输入框。
 
-## 框架支持
+## 前置条件
 
-| 框架 | 文件 | 行 | 说明 |
-| --- | --- | --- | --- |
-| React（dev 构建） | ✅ 精确 | ✅ 精确 | 读取 fiber 上的 JSX `__source`（`@vitejs/plugin-react` / CRA 自带） |
-| Vue 2 / Vue 3（dev 构建） | ✅ 精确 | ~ 精确 | 读取 `__file` 定位文件；行号由模板文本匹配确定 |
-| Svelte（dev 构建） | ✅ 精确 | ✅ 精确 | 读取 dev 模式注入的 `__svelte_meta` |
-| Angular | ~ 尽力 | ~ 尽力 | 识别 `ng-reflect-*` 标记，走组件/文本搜索 |
-| 任意框架 + 已装 code-inspector-plugin | ✅ 精确 | ✅ 精确 | 直接读取它注入的 `data-insp-*` DOM 属性 |
-| 其他 / 未知框架 | ✅ | ~ | 按点击元素的文本 / 类名 / id 在会话工作区内全文搜索 |
+| 条件 | 说明 |
+| --- | --- |
+| DSH | **DSH 桌面端 0.2.x**，且内置浏览器可用。纯网页的 `dsh web` 页面没有 Electron `<webview>`，不会出现选择图标。 |
+| 前端 | 正在运行的 dev server（Vite / webpack 等），页面必须是 **开发构建**。 |
+| 工作区 | 当前会话的工作目录必须是前端项目根目录；解析结果落在工作区外会被拒绝。 |
+| 框架 | React、Vue 2/3、Svelte、Angular、code-inspector，或通用文本搜索兜底。 |
 
-## 工作原理
-
-```
-代理模式：GET /dsh-element-source/preview?url=…
-  插件 host 取回 dev 页面 → 注入 <base href=dev地址> + 探针脚本 + 真实地址标记
-  → 从 GUI 源返回（页面获得真实 origin，localStorage/登录态正常，探针自动就绪）
-
-页面内探针（inject.js，IIFE、零依赖）
-  └─ 悬停高亮 → 点击 → 探针链（data-insp → React __source → Vue __file → Svelte → Angular → 通用）
-     → postMessage（跨域可用）→ DSH 页面
-「本地预览」入口（本插件注册，可打开 localhost）
-  ├─ 已装 dsh-better-sidebar → 侧边栏「本地预览」Tab（推荐入口）
-  └─ 未装 → 右侧全高侧边栏（可收起为边缘条，跟随当前会话）
-  └─ 收 postMessage → POST /dsh-element-source/api/resolve
-DSH Host
-  ├─ GET  /dsh-element-source/inject.js   （对外服务探针脚本）
-  ├─ GET  /dsh-element-source/preview     （取回页面 + 注入探针，仅限本机地址）
-  ├─ POST /dsh-element-source/api/resolve （信任围栏保护）
-  │     ├─ 路径规范化（webpack /src、Vite 绝对路径、Windows 盘符、可配置 mappings）
-  │     ├─ 越界检查：定位结果必须落在会话 cwd 内
-  │     └─ 文本 / 组件搜索兜底定位行号
-  └─ 定位结果填入聊天输入框草稿（不自动发送），由你决定何时发送
-```
-
-### 与 dsh-better-sidebar 的兼容
-
-插件**不依赖** dsh-better-sidebar，但**完全兼容**它：装了 better-sidebar 时入口是它的侧边栏 Tab（本插件的独立右侧侧边栏不显示，避免重叠）；没装时是右侧全高侧边栏（可收起为边缘条），背景用 DSH 主题 token，随 GUI 明暗主题自动变化。两者路由（`/sidebar/*` vs `/dsh-element-source/*`）、postMessage 命名空间、UI 插槽完全独立，互不冲突。
-
-### 为什么自带一个「本地预览」Tab
-
-前端 dev server 通常跑在 localhost，因此本插件自带一个极简的「本地预览」Tab——一个能直接打开本机地址（localhost / 127.x）的 iframe + 地址栏（它不是浏览器，不做多标签 / 历史等功能）。预览页面经由 DSH 源代理加载，探针自动注入、自动就绪。如果页面不在本机地址（例如绑定了局域网 IP 的 dev server），用 better-sidebar 内置浏览器或普通浏览器标签打开同样可以——inject.js 通过 postMessage 回传，不受沙箱影响。
+生产构建没有运行期源码元数据，因此选择图标只在开发页面出现。
 
 ## 安装
 
-**前置**：已装好 DSH（`dsh web` 可运行）。**可选**：[dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)——装了它，入口是侧边栏「本地预览」Tab；不装，则是右侧全高侧边栏。
+一条命令安装到 **desktop** profile：
 
-**macOS / Linux**（Windows 装了 Git Bash 或 WSL 也可）：
+macOS / Linux：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.sh | DSH_PROFILE=desktop bash
 ```
 
-**Windows（PowerShell 5.1+ / pwsh）**：
+Windows PowerShell 5.1+ / pwsh：
 
 ```powershell
+$env:DSH_PROFILE = "desktop"
 irm https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/scripts/install.ps1 | iex
 ```
 
 手动安装：
 
 ```sh
-cd ~/.dsh/profiles/web
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add dsh-element-source
+cd ~/.dsh/profiles/desktop
+npx -y --package @deepseek-ai/dsh dsh plugin --profile desktop add dsh-element-source
 ```
 
-装完**硬刷新浏览器**（Ctrl/Cmd+Shift+R）。
+如果你的桌面端使用别的 profile 名称，把 `desktop` 换成实际名称。
+安装完成后重启 DSH，或重新加载桌面端窗口，让浏览器端代码生效。
 
-## 让页面自己加载探针（可选）
+本地源码试用：
 
-「本地预览」Tab 的**代理模式会自动注入探针**。只有在你不用本插件预览、而是用其他浏览器打开页面（例如 better-sidebar 内置浏览器打开非本机地址）的场景，才需要让页面自己加载探针，二选一：
+```sh
+git clone https://github.com/GULI-lab/DSH-element-source
+cd ~/.dsh/profiles/desktop
+npx -y --package @deepseek-ai/dsh dsh plugin --profile desktop add link:/path/to/DSH-element-source
+```
 
-**方式 A：手动加一行 script**。在你的 `index.html` 的 `<body>` 里加：
+## 使用
+
+1. 启动前端 dev server，例如 `http://localhost:3000`。
+2. 打开 **DSH 内置浏览器**，访问这个地址。
+3. 如果页面是开发构建，浏览器工具栏**最后一项**（↗ 右侧）会出现 **选择元素图标**；
+   拾取开启时图标高亮，默认**已开启**。
+4. 鼠标悬停目标元素：出现虚线轮廓，以及元素右下角（元素外侧）的
+   **「添加到对话」** 气泡——不会盖住元素内容。
+5. **点气泡，不要点页面。** 拾取开启时页面点击会被拦截，只有气泡会执行定位。
+   定位结果会以文件引用 chip 的形式进入当前会话输入框，例如 `LoginPage.tsx:90`。
+6. 在输入框补充你的修改需求并发送。助手会读取文件、展示定位到的代码，然后等你提出修改。
+7. 点击输入框里的 chip，可在内置文件预览中**直接滚到对应行**。
+
+按 `Esc` 或点工具栏图标可关闭拾取，页面点击恢复正常；图标颜色和提示文字会反映当前状态。
+
+> 拾取默认开启，这是为了避免「想定位却点成了页面操作」。代价是普通点击被拦截；
+> 需要正常操作页面时，先按 `Esc` 或点工具栏图标关闭。
+
+### 输入框里收到什么
+
+- 主路径：一个 **文件引用 chip**，例如 `LoginPage.tsx:90`，与内置 `@` 文件菜单使用同一套
+  `@path` 引用语义；chip 可点击，点击后在内置预览里跳到对应行。
+- 兜底：如果输入框的引用 API 不可用，则追加纯文本 `[元素定位] src/App.vue:12`。
+- 默认不发送。只有把 `autoSteer` 设为 `true`，拾取成功后才会额外唤醒当前会话助手，
+  并发送一条双语定位消息。
+
+## 配置
+
+在 profile 的 `cordis.patch.yml` 中覆盖插件行：
+
+```yaml
+- id: element-source
+  config:
+    autoSteer: false        # 拾取后是否唤醒助手（默认 false：只填输入框草稿）
+    mappings:               # 源码路径前缀映射（monorepo / node_modules 重定向）
+      - find: '@app/ui/src'
+        replacement: 'D:/workspace/my-app/packages/ui/src'
+    sessionId: 'fixed-session'  # 固定会话（一般不需要）
+```
+
+- `autoSteer`：默认 `false`。设为 `true` 时，定位成功后会同时唤醒当前会话助手，
+  但不会替你发送输入框里的草稿。
+- `mappings`：路径前缀重写，在规范化之前应用；最终路径仍必须落在会话工作区内。
+- `sessionId`：把解析固定到某个会话；默认使用当前会话。
+
+`proxyHosts` 已移除；不再有预览代理。
+
+## 工作原理
+
+```text
+DSH 桌面端
+└─ 内置浏览器 <webview>
+   ├─ dev 页面：在 dom-ready / did-navigate / did-navigate-in-page 时注入探针
+   │    悬停 → 「添加到对话」气泡 → 拾取结果写入 window.__dshEsPicks
+   ├─ 工具栏：把选择元素图标追加为最后一项（仅 dev 页面；
+   │           页面变为非开发页面时自动移除）
+   └─ 客户端 overlay 每 300ms 轮询 webview
+        拾取 → POST /dsh-element-source/api/pick   （公开、只写的队列）
+        host → GET  /dsh-element-source/api/pending （信任围栏 + 真实会话）
+                 在会话 cwd 内解析 → file[:line[:column]]
+        client → 当前会话输入框中的文件引用 chip
+                 chip 点击 → 内置文件预览滚动到对应行
+```
+
+没有页面代理，也没有第二套 UI。探针直接注入 Electron `<webview>`，页面保留真实 origin
+和自己的网络行为。解析有预算（2.5 秒搜索上限、60 秒结果缓存），大 monorepo 里拾取也不会
+卡住输入框。
+
+## 框架支持
+
+| 框架 | 文件 | 行 | 说明 |
+| --- | --- | --- | --- |
+| React（dev 构建） | 精确 | 精确 | 读取 fiber 上的 JSX `__source`（@vitejs/plugin-react / CRA 注入） |
+| Vue 2 / Vue 3（dev 构建） | 精确 | 近似 | `__file` 定位文件；行号由模板文本匹配 |
+| Svelte（dev 构建） | 精确 | 精确 | 读取 dev 模式的 `__svelte_meta` |
+| Angular | 尽力 | 尽力 | 识别 `ng-reflect-*` 标记，再走组件/文本搜索 |
+| 任意框架 + code-inspector-plugin | 精确 | 精确 | 直接读取注入的 `data-insp-*` DOM 属性 |
+| 其他 / 未知框架 | 可以 | 近似 | 在会话工作区内按文本 / 类名 / id 全文搜索 |
+
+## 可选：在内置浏览器之外调试
+
+内置浏览器是受支持的主路径，也只有它会显示工具栏图标。如果你必须在普通浏览器里检查页面，
+可以自行加载探针；拾取仍会通过同一队列进入 DSH 桌面端。
+
+方式 A：script 标签：
 
 ```html
 <script src="http://127.0.0.1:3080/dsh-element-source/inject.js"></script>
 ```
 
-（`3080` 换成你 DSH Web UI 的实际端口；也可以用局域网 IP 以便其他设备访问。）
-
-**方式 B：Vite 插件自动注入**（Vue / React / Svelte / Angular 的 Vite 项目通用）：
+方式 B：Vite 插件：
 
 ```ts
 // vite.config.ts
@@ -113,83 +190,80 @@ export default defineConfig({
 })
 ```
 
-插件只在 dev server（`apply: 'serve'`）注入，生产构建不受影响。如果你的 DSH 不在默认地址，传 `dshOrigin`：
+Vite 插件只在 dev 注入（`apply: 'serve'`），生产构建不受影响。如果 DSH 不在默认地址：
 
 ```ts
 dshElementSourcePlugin({ dshOrigin: 'http://192.168.1.5:3080' })
 ```
 
-## 使用
-
-1. **打开入口**：装了 better-sidebar → 侧边栏「本地预览」Tab；没装 → 右侧全高侧边栏（默认展开，可收起为边缘条）（**注意：这里打开的是你自己的开发页面，不是 DSH 界面本身**）；
-2. 地址栏输入 `http://localhost:3000`（你的 dev server），回车；
-3. 看**探针状态图标**变绿（wifi 图标，代理自动就绪）；
-4. 点**选择**图标（十字准星），在页面里移动鼠标——目标元素高亮；**点击**即定位源码；
-5. 面板底部显示定位信息：`文件:行号` 与源码片段；
-6. **点击后结果自动填入聊天输入框**（如 `[元素定位] src/components/App.vue:12`）——不会自动发送，你可以继续补充自己的需求再回车发送。
-
-> `Esc` 取消选择。点击只把定位结果填入聊天输入框（草稿），发送与否完全由你决定。
-
-工具栏另有：**刷新**（重载当前页面）、**外部打开**（真实浏览器标签页）。
-
-## 配置
-
-在 DSH 的 `cordis.patch.yml`（或 profile 的 patch）中按行覆盖：
-
-```yaml
-- id: element-source
-  config:
-    autoSteer: false        # 拾取后自动唤醒助手（默认 false：只填聊天输入框草稿）
-    mappings:               # 源码路径前缀映射（monorepo / node_modules 重定向）
-      - find: '@app/ui/src'
-        replacement: 'D:/workspace/my-app/packages/ui/src'
-    proxyHosts:             # 代理模式额外放行的 host（默认仅本机回环地址）
-      - '192.168.1.10'
-    sessionId: 'fixed-session'  # 固定会话（一般不需要）
-```
+这种模式没有工具栏图标；探针在开发页面自动开启并显示「添加到对话」气泡。
+DSH 桌面端必须保持运行，拾取才会被当前会话取走。
 
 ## 安全
 
-- `/dsh-element-source/api/resolve` 与 `/dsh-element-source/preview` 都走与 `/api` 网关相同的浏览器信任围栏（Host 头 + `trustedHosts`）；
-- 解析出的文件路径**必须落在会话工作区（cwd）内**，否则拒绝；
-- 预览代理只允许本机回环地址（默认），且返回的页面与 DSH 同源——它只能承载你信任的本地 dev server；页面相对路径的 API 请求会打到 DSH 源（已知代价；需要同源数据接口的应用请让页面自己加载探针）；
-- inject.js 是只读代码，只收集点击元素的元数据，不访问 DSH 数据；`inject.js` 路由对外公开（让页面跨域加载它）；
-- `trust-fence.ts` 源自 DSH 的 BSD-3-Clause 实现（行为一致，独立拷贝，见文件头注释）。
+- `POST /dsh-element-source/api/pick` 是公开且允许跨域的，因为页面运行在隔离的 webview 里；
+  它只写不读，队列有界（32 条），不返回拾取数据。
+- `GET /dsh-element-source/api/pending` 与 DSH `/api` 网关使用同一套浏览器信任围栏，
+  并要求真实会话。
+- 解析使用会话的权威 `cwd`；落在工作区外的文件会被拒绝。`mappings` 只能重写前缀，
+  不能逃出工作区。
+- `inject.js` 是公开的只读探针代码，只收集元素元数据和可选的框架源码元数据，
+  不访问 DSH 数据。
+- 不再有预览代理，也不再任意抓取 URL，旧代理的 origin 取舍问题一并消失。
 
-## 与 code-inspector-plugin 的关系
+## 从 0.1.x 迁移
 
-[code-inspector](https://github.com/zh-lx/code-inspector) 是编译期方案：它作为 bundler 插件改写 JSX / SFC 编译，给元素注入 `data-insp-*` 属性，点击后用 `launch-ide` 打开本地 IDE。本插件是运行期方案：读取 dev 运行时已有的元数据，把定位结果交给 **DSH 聊天**而不是外部 IDE。两者互补——如果你已经装了 code-inspector-plugin，本插件会直接读取它注入的 `data-insp-*` 属性，获得全框架的精确行号，零额外成本。
+| 旧行为 | 新行为 |
+| --- | --- |
+| 独立「本地预览」Tab / 右侧边栏 | 只使用 DSH 内置浏览器 |
+| dsh-better-sidebar 集成 | 已移除，不再支持 |
+| `GET /dsh-element-source/preview` 代理 | 已移除（404） |
+| `proxyHosts` 配置 | 已移除 |
+| 安装到 `web` profile | 安装到 `desktop` profile |
+| 拾取后向输入框插入纯文本 | 文件引用 chip（+ 纯文本兜底） |
 
-## 参与贡献
+`autoSteer`、`mappings`、`sessionId` 仍然有效。
+0.1.x 安装可能还留下 dsh-better-sidebar，不再需要时请单独卸载。
 
-欢迎贡献！开发环境搭建与提交流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。发现 bug 或有新想法，欢迎开 [issue](https://github.com/GULI-lab/DSH-element-source/issues)。
+## 常见问题
+
+| 现象 | 检查项 |
+| --- | --- |
+| 工具栏没有选择图标 | 使用 DSH 桌面端的内置浏览器，而不是普通浏览器里的 `dsh web` 页面；页面必须是开发构建；确认插件装在 `desktop` profile，然后重启应用。 |
+| 有图标，但悬停没有「添加到对话」气泡 | 探针可能没激活：页面可能是生产构建，或页面在插件之前加载。刷新页面再悬停。 |
+| 拾取成功，但输入框没有结果 | 当前会话需要工作目录。把会话工作区切到项目根目录，并确认 DSH 应用在运行。 |
+| 提示定位结果在工作区外 | 解析出的文件不在会话 cwd 内。把会话工作目录切到项目根目录。 |
+| 点 chip 打开预览停在顶部，没跳到行 | 行号按本次运行插入的 chip 记录；App 重启后恢复的旧 chip 会退化为从顶部打开，重新拾取一次即可恢复跳行。 |
+| dsh-better-sidebar 里还显示旧的「本地预览」Tab | 那是 0.1.x 的旧集成。安装新版本并重启；如果 better-sidebar 只为这个插件安装，可以卸载。 |
+| `autoSteer` 没有唤醒助手 | 会话必须有在线 agent；单纯拾取不会发送消息。 |
+
+## 已知限制
+
+- **仅桌面端。** 纯网页的 `dsh web` 没有 Electron `<webview>` 页面，工具栏图标和探针都不会出现。
+- **仅开发页面。** 生产构建没有运行期源码元数据，图标会隐藏并从该页面移除。
+- **工具栏 DOM 是内置实现。** 选择图标追加在内置浏览器工具栏上；未来 DSH UI 重构可能需要插件同步更新。
+- **工作区限制。** 如果会话工作区不是项目根目录，定位会落到错误目录或被拒绝；请先切换会话工作区。
+- **Vue 行号是启发式。** 纯图标 / 无文本元素可能退化为文件级或组件定义行。
+- **Angular / Svelte 需要 dev 构建。** 生产构建没有可用源码元数据。
+- **autoSteer 需要会话助手在线。** 它只唤醒已有 agent，不会替你发送输入框草稿。
+- **不支持 dsh-better-sidebar。** 旧侧边栏入口已不存在，也没有兜底侧边栏。
 
 ## 开发
 
 ```sh
 pnpm install
 pnpm typecheck     # tsc --noEmit
-pnpm test          # vitest（resolve / probes / steer / protocol / preview-proxy / draft）
-pnpm build         # tsc 类型 + tsdown 双端产物（lib/index.js、lib/client.js、lib/inject.js、lib/vite-plugin.js）
+pnpm test          # vitest：draft / probes / protocol / resolve / steer
+pnpm build         # tsc 类型 + tsdown 产物
 ```
 
-产物：`lib/index.js`（host）、`lib/client.js`（浏览器端，`window.__ModuleLoader__.load` 模块表格式）、`lib/inject.js`（页面探针，经典 `<script>`，零依赖）、`lib/vite-plugin.js`（Vite 注入插件）。
+产物：`lib/index.js`（host）、`lib/client.js`（浏览器端）、`lib/inject.js`（页面探针）、
+`lib/vite-plugin.js`（可选 Vite 注入）。
 
-想在 npm 发布前先本地试用源码版本：
+## 参与贡献
 
-```sh
-git clone https://github.com/GULI-lab/DSH-element-source
-cd ~/.dsh/profiles/web
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add link:/path/to/DSH-element-source
-```
-
-## 已知限制
-
-- 本地预览 Tab 面向**你自己的开发页面**：把 DSH 界面本身（如 `http://127.0.0.1:3080`）放进预览 iframe 不会渲染——GUI 无法以被代理的方式启动，这不是本插件的 bug；
-- 预览页面从 DSH 源加载：相对路径的 API 请求会打到 DSH 源而非 dev server（需要同源数据接口的应用请让页面自己加载探针）；页面自带严格 CSP（如 `script-src 'self'`）的极少数应用可能拦掉注入的探针；
-- Vue 的行号依赖模板文本匹配：纯图标 / 无文本元素会退化为「只定位文件」或组件定义行；
-- Angular / Svelte 生产构建不带运行期源码信息，需 dev 构建；
-- 若要在本地预览 Tab 之外的浏览器里（非本机地址）使用定位，页面需自行加载探针（手动一行或 Vite 插件）；这是跨域 iframe 无法从父页面读取 DOM 的同源策略决定的，任何 iframe 方案都绕不开。
+欢迎贡献！开发环境搭建与提交流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+发现 bug 或有新想法，欢迎开 [issue](https://github.com/GULI-lab/DSH-element-source/issues)。
 
 ## License
 

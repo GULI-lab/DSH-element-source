@@ -18,19 +18,19 @@ pnpm test
 pnpm build
 ```
 
-To try a local checkout inside DSH (instead of the published npm package):
+To try a local checkout inside DSH (instead of the published npm package), install it into the **desktop** profile used by the DSH desktop app:
 
 ```sh
-cd ~/.dsh/profiles/web
-npx -y --package @deepseek-ai/dsh dsh plugin --profile web add link:/path/to/dsh-element-source
+cd ~/.dsh/profiles/desktop
+npx -y --package @deepseek-ai/dsh dsh plugin --profile desktop add link:/path/to/dsh-element-source
 ```
 
-Then restart `dsh web` and hard-refresh the browser (Ctrl/Cmd+Shift+R). Client-only changes need a rebuild (`pnpm build` or `pnpm watch`) plus a hard refresh; host-half changes need a `dsh web` restart.
+Then restart the DSH desktop app or reload its window. Client-only changes need a rebuild (`pnpm build` or `pnpm watch`) plus a window reload; host-half changes need a full app restart.
 
 ## Before you submit
 
 - Run `pnpm typecheck`, `pnpm test` and `pnpm build` locally — all must pass;
-- Add or update tests under `tests/` for behavior changes (the resolve / probes / steer / protocol / preview-proxy / draft suites are pure and fast);
+- Add or update tests under `tests/` for behavior changes (the resolve / probes / steer / protocol / draft suites are pure and fast);
 - Keep the README (`README.md` + `README.zh.md`) in sync with user-visible changes;
 - Prefer small, self-contained commits with clear messages.
 

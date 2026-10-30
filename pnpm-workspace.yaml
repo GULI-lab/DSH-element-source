@@ -1,9 +1,0 @@
-# Transitive native build scripts this package intentionally does not run:
-# node-pty (better-sidebar's terminal backend) and protobufjs need toolchains
-# irrelevant to dsh-element-source; the host profile's own better-sidebar
-# install approves them when the user actually uses the terminal.
-allowBuilds:
-  node-pty: false
-  protobufjs: false
-minimumReleaseAgeExclude:
-  - dsh-better-sidebar@0.11.0

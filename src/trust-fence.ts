@@ -29,7 +29,7 @@ function parseAuthority(authority: string): URL | undefined {
 }
 
 /** Whether a normalized URL hostname names the local loopback authority. */
-export function isLoopbackHostname(hostname: string): boolean {
+function isLoopbackHostname(hostname: string): boolean {
   if (hostname === 'localhost' || hostname === '[::1]') return true
   const parts = hostname.split('.')
   return parts.length === 4
@@ -66,8 +66,12 @@ export function isTrustedApiRequest(request: ApiTrustRequest, trustedHosts: read
   const hostUrl = parseAuthority(host)
   if (hostUrl === undefined) return false
   if (!isLoopbackHostname(hostUrl.hostname) && !isTrustedAuthority(hostUrl, trustedHosts)) return false
-  if (header(request.headers, 'sec-fetch-site') === 'cross-site') return false
   const origin = header(request.headers, 'origin')
+  // The desktop GUI page runs under the dsh-app:// scheme. Only a page served
+  // by that scheme can send this Origin — a web page cannot claim a non-http
+  // origin — so it is trusted exactly like an authenticated same-origin caller.
+  if (origin === 'dsh-app://app') return true
+  if (header(request.headers, 'sec-fetch-site') === 'cross-site') return false
   if (origin === undefined) return true
   try {
     return new URL(origin).host === hostUrl.host

@@ -1,9 +1,8 @@
 /**
- * Wire protocol shared by all three halves of dsh-element-source: the page
- * probe script (inject.js), the browser tab (client), and the Node host.
- * This module is pure — JSON-compatible types and pure functions only, so it
- * can be inlined into the browser bundle and the inject IIFE without pulling
- * in node or DOM globals.
+ * Wire protocol shared by the page probe (inject.js), the DSH chat client, and
+ * the host. This module is pure — JSON-compatible types and pure functions
+ * only — so it can be inlined into the inject IIFE without pulling in node or
+ * DOM globals.
  */
 
 /** Frameworks the probe chain can identify. */
@@ -37,7 +36,7 @@ export interface ElementDescriptor {
   attrs: Array<[string, string]>
 }
 
-/** The complete pick payload the probe script posts to the parent page. */
+/** The pick payload the probe script posts to the DSH host. */
 export interface ElementPick {
   protocolVersion: number
   framework: PickFramework
@@ -60,50 +59,28 @@ export type ResolveMethod =
   | 'component-search'
   | 'none'
 
-/** The host's answer to one resolve request. */
-export interface ResolveResult {
+/**
+ * One resolved queued pick returned to the DSH chat client poller. The client
+ * only needs the display location; resolution happens host-side inside the
+ * session workspace, so nothing here can escape that confinement.
+ */
+export interface PendingResult {
+  /** Queue sequence of the pick this entry answers. */
+  seq: number
   ok: boolean
-  /** Absolute path of the located file (always confined to the session cwd). */
-  file?: string
-  /** The located file relative to the session cwd. */
+  /** The located file relative to the session workspace. */
   relative?: string
   line?: number
   column?: number
   /** The source line (or the surrounding window) as a snippet. */
   snippet?: string
-  method: ResolveMethod
-  framework: PickFramework
-  /** Whether the located file exists on disk. */
-  existed: boolean
-  /** Whether a steering message was delivered to the session's agent. */
-  steered: boolean
+  method?: ResolveMethod
+  framework?: PickFramework
   /** Human-readable failure reason when ok is false. */
   error?: string
 }
 
-/** postMessage payloads the probe script sends to the parent page. */
-export type ProbeToParentMessage =
-  | { type: 'dsh-es:hello'; protocolVersion: number }
-  | { type: 'dsh-es:pick'; pick: ElementPick }
-  | { type: 'dsh-es:pick-cancel' }
-  | { type: 'dsh-es:pick-done' }
-  | { type: 'dsh-es:select'; pick: ElementPick | null }
-
-/** postMessage payloads the parent page sends into the probe script. */
-export type ParentToProbeMessage =
-  | { type: 'dsh-es:set-mode'; mode: boolean }
-  | { type: 'dsh-es:ping' }
-
 export const PROTOCOL_VERSION = 1
-
-export const PROBE_MESSAGE_PREFIX = 'dsh-es:'
-
-/** True when a message object carries the probe protocol type marker. */
-export function isProbeMessage(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) return false
-  const type = (value as Record<string, unknown>).type
-  return typeof type === 'string' && type.startsWith(PROBE_MESSAGE_PREFIX)
-}
 
 /** Cap a string to `limit` code points, appending an ellipsis when truncated. */
 export function capText(value: string, limit: number): string {
@@ -133,49 +110,8 @@ export function classList(classes: readonly (string | null | undefined)[]): stri
   return out
 }
 
-/**
- * Normalize one address-bar input for the LOCAL preview tab. Unlike the
- * built-in sidebar browser, loopback URLs (localhost / 127.x) are allowed —
- * the whole point of the tab is previewing local dev servers. Anything that
- * is not http(s) is refused.
- */
-export type PreviewUrlResult =
-  | { kind: 'ok'; url: string }
-  | { kind: 'blocked' }
-  | { kind: 'invalid' }
-
-const FORBIDDEN_SCHEMES = new Set([
-  'javascript', 'data', 'file', 'about', 'vbscript', 'blob',
-  'mailto', 'tel', 'ftp', 'ftps', 'ws', 'wss', 'sftp', 'ssh',
-  'chrome', 'chrome-extension', 'moz-extension', 'edge', 'opera', 'resource', 'view-source',
-])
-
-/** Normalize an address-bar input against the local-preview policy. */
-export function normalizePreviewUrl(input: string): PreviewUrlResult {
-  const trimmed = input.trim()
-  if (trimmed === '') return { kind: 'invalid' }
-  const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(trimmed)
-  let withScheme: string
-  if (schemeMatch === null) {
-    withScheme = `http://${trimmed}`
-  } else {
-    const scheme = schemeMatch[1]!.toLowerCase()
-    if (scheme === 'http' || scheme === 'https') withScheme = trimmed
-    else if (FORBIDDEN_SCHEMES.has(scheme)) return { kind: 'blocked' }
-    else withScheme = `http://${trimmed}`
-  }
-  let url: URL
-  try {
-    url = new URL(withScheme)
-  } catch {
-    return { kind: 'invalid' }
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return { kind: 'blocked' }
-  return { kind: 'ok', url: url.href }
-}
-
 /** Sanitize a value that may come from an untrusted page into a plain string. */
-export function safeString(value: unknown, fallback = ''): string {
+function safeString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
 }
 

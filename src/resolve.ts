@@ -15,7 +15,7 @@
  * refused so a malicious page cannot make the plugin read arbitrary files.
  */
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve as resolvePath, sep } from 'node:path'
+import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import type { ElementPick, ResolveMethod } from './protocol.ts'
 import { normalizeSearchText } from './protocol.ts'
 
@@ -28,7 +28,7 @@ export interface SourceMapping {
 }
 
 /** Options controlling one resolution. */
-export interface ResolveOptions {
+interface ResolveOptions {
   /** The session's authoritative working directory (must be absolute). */
   cwd: string
   /** Optional source-path prefix mappings, applied before normalization. */
@@ -41,6 +41,8 @@ export interface ResolveOptions {
   maxFileBytes?: number
   /** Maximum files the fallback search examines. */
   maxFiles?: number
+  /** Wall-clock budget of one fallback search in milliseconds. Default 2500. */
+  searchBudgetMs?: number
   /** Framework hint that biases which extensions the text search tries first. */
   frameworkHint?: ElementPick['framework']
 }
@@ -61,7 +63,7 @@ export interface LocatedSource {
   existed: boolean
 }
 
-export const DEFAULT_SEARCH_EXTENSIONS = [
+const DEFAULT_SEARCH_EXTENSIONS = [
   'vue', 'jsx', 'tsx', 'js', 'ts', 'mjs', 'cjs', 'svelte', 'html', 'htm',
   'css', 'scss', 'less', 'styl',
 ] as const
@@ -72,6 +74,27 @@ const SKIP_DIRS = new Set([
   '.next', '.nuxt', '.output', '.svelte-kit', 'target', '__pycache__', '.cache',
 ])
 
+/** Resolution cache: repeated picks on one element skip the slow fallback search. */
+interface SearchCacheEntry { hit: TextHit | undefined; at: number }
+
+const SEARCH_CACHE = new Map<string, SearchCacheEntry>()
+const SEARCH_CACHE_TTL_MS = 60_000
+const SEARCH_CACHE_MAX = 200
+
+/** Cache key of one search (cwd + the element search keys). */
+function searchCacheKey(cwd: string, keys: SearchKeys): string {
+  return `${cwd}\u0000${JSON.stringify([keys.text ?? '', keys.classes, keys.id ?? '', keys.name ?? ''])}`
+}
+
+/** Store one search result, bounded and TTL-checked on read. */
+function rememberSearch(key: string, hit: TextHit | undefined): void {
+  if (SEARCH_CACHE.size >= SEARCH_CACHE_MAX) {
+    const oldest = SEARCH_CACHE.keys().next().value
+    if (oldest !== undefined) SEARCH_CACHE.delete(oldest)
+  }
+  SEARCH_CACHE.set(key, { hit, at: Date.now() })
+}
+
 /** True when `target` equals `root` or sits below it. */
 export function isWithin(root: string, target: string): boolean {
   const rel = relative(root, target)
@@ -79,7 +102,7 @@ export function isWithin(root: string, target: string): boolean {
 }
 
 /** The refusal message for a source outside the session workspace. */
-export function outsideWorkspaceMessage(file: string): string {
+function outsideWorkspaceMessage(file: string): string {
   return `located file is outside the session workspace: ${file} —— 请把会话工作区切换到项目目录（如侧边栏选择项目文件夹）再试 / switch the session workspace to your project and retry`
 }
 
@@ -137,7 +160,7 @@ async function readSnippet(file: string, line?: number): Promise<string | undefi
 }
 
 /** Whether a file exists on disk. */
-export async function fileExists(file: string): Promise<boolean> {
+async function fileExists(file: string): Promise<boolean> {
   try {
     return (await stat(file)).isFile()
   } catch {
@@ -146,7 +169,7 @@ export async function fileExists(file: string): Promise<boolean> {
 }
 
 /** Pick the first existing candidate; undefined when none exist. */
-export async function firstExisting(candidates: string[]): Promise<string | undefined> {
+async function firstExisting(candidates: string[]): Promise<string | undefined> {
   for (const candidate of candidates) {
     if (await fileExists(candidate)) return candidate
   }
@@ -154,7 +177,7 @@ export async function firstExisting(candidates: string[]): Promise<string | unde
 }
 
 /** Search keys derived from an element descriptor. */
-export interface SearchKeys {
+interface SearchKeys {
   /** Normalized text, when long enough to be distinctive. */
   text?: string
   classes: string[]
@@ -166,7 +189,7 @@ export interface SearchKeys {
 const MIN_TEXT_LENGTH = 2
 
 /** Build the search keys for one pick. */
-export function searchKeysOf(pick: ElementPick): SearchKeys {
+function searchKeysOf(pick: ElementPick): SearchKeys {
   const text = pick.element.text !== undefined
     ? normalizeSearchText(pick.element.text)
     : undefined
@@ -195,7 +218,7 @@ function escapeRegExp(value: string): string {
 }
 
 /** One text-search hit. */
-export interface TextHit {
+interface TextHit {
   file: string
   line: number
   /** The matched source line, trimmed. */
@@ -209,7 +232,7 @@ export interface TextHit {
  * stray hit in a `.js` bundle), then a second pass covers every configured
  * extension.
  */
-export async function searchWorkspace(
+async function searchWorkspace(
   cwd: string,
   keys: SearchKeys,
   options: ResolveOptions,
@@ -221,17 +244,23 @@ export async function searchWorkspace(
   if (keys.id !== undefined) patterns.push({ text: keys.id, kind: 'id' })
   if (patterns.length === 0) return undefined
 
-  const maxFiles = options.maxFiles ?? 4000
-  const maxFileBytes = options.maxFileBytes ?? 512 * 1024
+  // Repeated clicks on one element skip the slow disk walk entirely.
+  const cacheKey = searchCacheKey(cwd, keys)
+  const cached = SEARCH_CACHE.get(cacheKey)
+  if (cached !== undefined && Date.now() - cached.at < SEARCH_CACHE_TTL_MS) return cached.hit
+
+  const maxFiles = options.maxFiles ?? 3000
+  const maxFileBytes = options.maxFileBytes ?? 256 * 1024
   const maxDepth = options.maxDepth ?? 6
+  const deadline = Date.now() + (options.searchBudgetMs ?? 2500)
 
   const walk = async (extensions: Set<string>): Promise<TextHit | undefined> => {
     let filesExamined = 0
     const scan = async (dir: string, depth: number): Promise<TextHit | undefined> => {
-      if (depth > maxDepth || filesExamined >= maxFiles) return undefined
+      if (depth > maxDepth || filesExamined >= maxFiles || Date.now() > deadline) return undefined
       const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
       for (const entry of entries) {
-        if (filesExamined >= maxFiles) return undefined
+        if (filesExamined >= maxFiles || Date.now() > deadline) return undefined
         const full = join(dir, entry.name)
         if (entry.isDirectory()) {
           if (SKIP_DIRS.has(entry.name)) continue
@@ -255,12 +284,16 @@ export async function searchWorkspace(
   // Pass 1: only the framework's own file types.
   const biased = frameworkExtensions(options.frameworkHint ?? 'generic')
     ?.filter(ext => all.has(ext))
+  const remember = (hit: TextHit | undefined): TextHit | undefined => {
+    rememberSearch(cacheKey, hit)
+    return hit
+  }
   if (biased !== undefined && biased.length > 0) {
     const first = await walk(new Set(biased))
-    if (first !== undefined) return first
+    if (first !== undefined) return remember(first)
   }
   // Pass 2: every configured extension.
-  return walk(all)
+  return remember(await walk(all))
 }
 
 /** Read one file (bounded) and return the first line containing a pattern. */
@@ -309,23 +342,24 @@ const COMPONENT_PATTERNS: Array<(name: string) => RegExp> = [
 ]
 
 /** Locate a component name's definition inside the workspace. */
-export async function searchComponent(
+async function searchComponent(
   cwd: string,
   name: string,
   options: ResolveOptions,
 ): Promise<TextHit | undefined> {
   const extensions = new Set(options.searchExtensions ?? DEFAULT_SEARCH_EXTENSIONS)
   let filesExamined = 0
-  const maxFiles = options.maxFiles ?? 4000
-  const maxFileBytes = options.maxFileBytes ?? 512 * 1024
+  const maxFiles = options.maxFiles ?? 3000
+  const maxFileBytes = options.maxFileBytes ?? 256 * 1024
   const maxDepth = options.maxDepth ?? 6
+  const deadline = Date.now() + (options.searchBudgetMs ?? 2500)
   const patterns = COMPONENT_PATTERNS.map(make => make(name))
 
   const walk = async (dir: string, depth: number): Promise<TextHit | undefined> => {
-    if (depth > maxDepth || filesExamined >= maxFiles) return undefined
+    if (depth > maxDepth || filesExamined >= maxFiles || Date.now() > deadline) return undefined
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
     for (const entry of entries) {
-      if (filesExamined >= maxFiles) return undefined
+      if (filesExamined >= maxFiles || Date.now() > deadline) return undefined
       const full = join(dir, entry.name)
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name)) continue
@@ -458,7 +492,7 @@ function methodFor(framework: ElementPick['framework'], hasLine: boolean): Resol
  * reports the file but not the line): scan for the clicked text, then class
  * names, then the id — first match wins.
  */
-export async function locateLineInFile(file: string, pick: ElementPick, maxFileBytes = 512 * 1024): Promise<{ line?: number }> {
+async function locateLineInFile(file: string, pick: ElementPick, maxFileBytes = 512 * 1024): Promise<{ line?: number }> {
   const keys = searchKeysOf(pick)
   const patterns: string[] = []
   if (keys.text !== undefined) patterns.push(keys.text)
@@ -480,9 +514,4 @@ export async function locateLineInFile(file: string, pick: ElementPick, maxFileB
     // Unreadable file: no line.
   }
   return {}
-}
-
-/** Normalize the separator in a relative path for display. */
-export function displayRelative(cwd: string, file: string): string {
-  return relative(cwd, file).split(sep).join('/')
 }

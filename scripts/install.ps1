@@ -1,19 +1,18 @@
-# Install dsh-element-source into the default web profile.
+# Install dsh-element-source into the default desktop profile.
 # Idempotent: safe to re-run (updates the package).
 param(
-    [string]$Version,
-    [switch]$Restart
+    [string]$Version
 )
 
 $ErrorActionPreference = 'Stop'
 
-$Profile = if ($env:DSH_PROFILE) { $env:DSH_PROFILE } else { 'web' }
+$Profile = if ($env:DSH_PROFILE) { $env:DSH_PROFILE } else { 'desktop' }
 $DshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME '.dsh' }
 $ProfileDir = Join-Path $DshHome "profiles\$Profile"
 
 if (-not (Test-Path $ProfileDir)) {
     Write-Host "profile '$Profile' not found at $ProfileDir" -ForegroundColor Red
-    Write-Host "run 'dsh web' once so the profile initializes, then retry"
+    Write-Host "start the DSH desktop app once so the profile initializes, then retry"
     exit 1
 }
 
@@ -49,12 +48,7 @@ try {
     npx -y --package @deepseek-ai/dsh dsh plugin --profile $Profile add $Package
 
     Write-Host ""
-    Write-Host 'Installed. Hard-refresh the browser (Cmd/Ctrl+Shift+R) to load the client half.'
-
-    if ($Restart) {
-        Write-Host 'Restarting dsh web...'
-        dsh web
-    }
+    Write-Host 'Installed. Restart the DSH desktop app or reload its window to load the client half.'
 }
 finally {
     Pop-Location
