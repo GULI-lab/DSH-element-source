@@ -9,7 +9,7 @@ composer as a **file reference chip**, and clicking that chip opens the built-in
 preview scrolled to the exact line. Nothing is sent until you send it.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/assets/dsh-element-source.png" alt="Pick an element in the DSH built-in browser and get its source as a file reference chip in the chat" width="900" />
+  <img src="https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/assets/element-source.png" alt="Pick an element in the DSH built-in browser and get its source as a file reference chip in the chat" width="900" />
 </p>
 
 <p align="center">

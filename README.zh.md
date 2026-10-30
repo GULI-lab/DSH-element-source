@@ -8,7 +8,7 @@
 默认不会发送任何消息。
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/assets/dsh-element-source.png" alt="在 DSH 内置浏览器里拾取元素，源码以文件引用 chip 进入聊天" width="900" />
+  <img src="https://raw.githubusercontent.com/GULI-lab/DSH-element-source/main/assets/element-source.png" alt="在 DSH 内置浏览器里拾取元素，源码以文件引用 chip 进入聊天" width="900" />
 </p>
 
 <p align="center">
