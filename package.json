@@ -1,6 +1,6 @@
 {
   "name": "dsh-element-source",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Click any UI element in your running dev page — opened in the DSH built-in browser — and get its Vue / React / Svelte / Angular source file as a file reference chip in the DSH chat, jumpable to the exact line.",
   "type": "module",
   "license": "MIT",

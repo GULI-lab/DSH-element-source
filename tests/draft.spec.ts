@@ -22,14 +22,28 @@ describe('buildMention', () => {
 })
 
 describe('buildReference', () => {
-  it('builds a file reference chip payload', () => {
+  it('builds a file reference chip payload with the line in the serialized mention', () => {
     expect(buildReference('frontend\\src\\NavRail.tsx', 52)).toEqual({
       source: 'reference',
-      ref: '@frontend/src/NavRail.tsx',
+      ref: '@frontend/src/NavRail.tsx:52',
       label: 'NavRail.tsx:52',
       appearance: 'file',
-      clipboardText: '@frontend/src/NavRail.tsx',
+      clipboardText: '@frontend/src/NavRail.tsx:52',
     })
+  })
+
+  it('keeps the mention line-free when the line is unknown', () => {
+    expect(buildReference('src/App.tsx')).toEqual({
+      source: 'reference',
+      ref: '@src/App.tsx',
+      label: 'App.tsx',
+      appearance: 'file',
+      clipboardText: '@src/App.tsx',
+    })
+  })
+
+  it('carries the line inside a quoted path', () => {
+    expect(buildReference('src/my file.tsx', 9).ref).toBe('@"src/my file.tsx:9"')
   })
 })
 

@@ -131,8 +131,9 @@ normally again. The icon color and tooltip reflect the current state.
 ### What the composer receives
 
 - Primary path: a **file reference chip** such as `LoginPage.tsx:90`, using the
-  same `@path` mention semantics as the built-in `@` file menu. The chip is
-  clickable and jumps to the line in the built-in preview.
+  same `@path` mention semantics as the built-in `@` file menu. The chip
+  serializes as the `@path:90` mention, so the agent receives the located line;
+  it is clickable and jumps to the line in the built-in preview.
 - Fallback: if the composer reference API is unavailable, plain
   `[元素定位] src/App.vue:12` text is appended to the draft.
 - Nothing is sent automatically. Set `autoSteer: true` only if you want the

@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-30
+
+### Fixed
+
+- The located **line now reaches the model**: the composer chip serializes as an
+  `@path:line` mention (e.g. `@src/App.tsx:12`), so the agent no longer reads the
+  whole file when the pick pointed at one line. The chip still renders as
+  `App.tsx:12` in the composer and in the sent message.
+
 ## [0.2.0] - 2026-10-30
 
 ### Changed (breaking)

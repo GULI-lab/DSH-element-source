@@ -109,7 +109,8 @@ npx -y --package @deepseek-ai/dsh dsh plugin --profile desktop add link:/path/to
 ### 输入框里收到什么
 
 - 主路径：一个 **文件引用 chip**，例如 `LoginPage.tsx:90`，与内置 `@` 文件菜单使用同一套
-  `@path` 引用语义；chip 可点击，点击后在内置预览里跳到对应行。
+  `@path` 引用语义；序列化后是 `@path:90`，模型能拿到具体行号；chip 可点击，
+  点击后在内置预览里跳到对应行。
 - 兜底：如果输入框的引用 API 不可用，则追加纯文本 `[元素定位] src/App.vue:12`。
 - 默认不发送。只有把 `autoSteer` 设为 `true`，拾取成功后才会额外唤醒当前会话助手，
   并发送一条双语定位消息。

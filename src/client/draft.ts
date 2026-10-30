@@ -50,9 +50,20 @@ export function buildMention(relative: string): string {
   return /\s/.test(path) ? `@"${path}"` : `@${path}`
 }
 
+/**
+ * The mention text carrying the located line, e.g. `@src/App.tsx:12`. The
+ * reference serializes to this text, so the model receives the line — a chip
+ * labeled `App.tsx:12` alone leaves the agent reading the whole file.
+ */
+function mentionWithLine(relative: string, line?: number): string {
+  const mention = buildMention(relative)
+  if (line === undefined) return mention
+  return mention.endsWith('"') ? `${mention.slice(0, -1)}:${line}"` : `${mention}:${line}`
+}
+
 /** The reference chip payload of one located source. */
 export function buildReference(relative: string, line?: number): DraftReference {
-  const mention = buildMention(relative)
+  const mention = mentionWithLine(relative, line)
   const path = mentionPath(relative)
   const base = path.slice(path.lastIndexOf('/') + 1)
   return {
